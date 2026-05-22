@@ -4,7 +4,7 @@ Protótipo de visualização de licitações públicas (kanban / tabela / calend
 
 ## Demo ao vivo
 
-[brunnobkm.github.io/licitacoes-em-andamento](https://brunnobkm.github.io/licitacoes-em-andamento/)
+[brunnobkm.github.io/settle-licitacoes-em-andamento](https://brunnobkm.github.io/settle-licitacoes-em-andamento/)
 
 ## Views
 
