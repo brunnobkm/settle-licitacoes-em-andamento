@@ -1,0 +1,2156 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Card kanban · Protótipo edição inline</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/lucide@latest/dist/umd/lucide.js"></script>
+<style>
+  :root {
+    --accent: #3A9B9E;
+    --urgent: #d97706;
+  }
+  * { -webkit-font-smoothing: antialiased; }
+  body { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+
+  .prop {
+    transition: background-color 120ms ease;
+    cursor: pointer;
+    border-radius: 6px;
+    position: relative;
+  }
+  .prop:hover { background-color: rgba(15,15,15,.035); }
+  .prop.editing { background-color: #F5F5F5; }
+
+  /* Propriedade read-only — mantém tooltip, sem hover de edição */
+  .prop-static {
+    border-radius: 6px;
+    position: relative;
+    cursor: default;
+  }
+
+  /* Estado de drag */
+  .property-row {
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  .property-row.drag-placeholder {
+    background: rgba(15,15,15,.05);
+    border-radius: 6px;
+    color: transparent;
+  }
+  .property-row.drag-placeholder * {
+    visibility: hidden;
+  }
+  .drag-ghost {
+    position: fixed;
+    pointer-events: none;
+    z-index: 1000;
+    background: white;
+    border: 1px solid rgba(15,15,15,.1);
+    border-radius: 8px;
+    box-shadow:
+      0 2px 4px rgba(15,15,15,.06),
+      0 8px 24px rgba(15,15,15,.14);
+    transform: rotate(.5deg);
+  }
+  .drag-ghost::after { display: none !important; }
+  body.is-dragging,
+  body.is-dragging * { cursor: grabbing !important; }
+  body.is-dragging [data-tooltip]::after { opacity: 0 !important; transition-delay: 0ms; }
+
+  /* Botão "Adicionar propriedade" */
+  .add-property-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    background: white;
+    border: 1px dashed rgba(15,15,15,.18);
+    border-radius: 8px;
+    font-size: 13px;
+    color: rgba(15,15,15,.6);
+    cursor: pointer;
+    transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+  }
+  .add-property-btn:hover {
+    background: rgba(255,255,255,.8);
+    border-color: rgba(15,15,15,.3);
+    border-style: solid;
+    color: #1f1f1f;
+  }
+
+  /* Botão X pra remover demo property */
+  .demo-remove {
+    position: absolute;
+    top: 50%;
+    right: 4px;
+    transform: translateY(-50%);
+    width: 18px;
+    height: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    color: rgba(15,15,15,.45);
+    background: white;
+    opacity: 0;
+    transition: opacity 120ms ease, background-color 120ms ease;
+    z-index: 5;
+  }
+  .prop:hover .demo-remove,
+  .prop-static:hover .demo-remove { opacity: 1; }
+  .demo-remove:hover { background: rgba(15,15,15,.08); color: #1f1f1f; }
+  .prop.editing .demo-remove { opacity: 0 !important; }
+
+  /* Checkbox custom */
+  .checkbox-toggle {
+    width: 16px;
+    height: 16px;
+    border: 1.5px solid rgba(15,15,15,.3);
+    border-radius: 3px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    transition: background-color 120ms, border-color 120ms;
+  }
+  .checkbox-toggle.checked {
+    background: #1f1f1f;
+    border-color: #1f1f1f;
+  }
+
+  /* Custom tooltip — appears 250ms after hover */
+  [data-tooltip] { position: relative; }
+  [data-tooltip]::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: calc(100% + 4px);
+    left: 8px;
+    background: #1f1f1f;
+    color: white;
+    font-size: 11px;
+    font-weight: 500;
+    padding: 4px 8px;
+    border-radius: 4px;
+    white-space: nowrap;
+    z-index: 100;
+    pointer-events: none;
+    opacity: 0;
+    transform: translateY(2px);
+    transition: opacity 120ms ease, transform 120ms ease;
+    transition-delay: 0ms;
+  }
+  [data-tooltip]:hover::after {
+    opacity: 1;
+    transform: translateY(0);
+    transition-delay: 250ms;
+  }
+  /* Hide tooltip while editing the property */
+  [data-tooltip].editing::after { opacity: 0 !important; transition-delay: 0ms; }
+
+  /* Tooltip à esquerda para propriedades do card (não cobre o conteúdo) */
+  .property-row[data-tooltip]::after {
+    bottom: auto;
+    left: auto;
+    right: calc(100% + 8px);
+    top: 50%;
+    transform: translate(2px, -50%);
+  }
+  .property-row[data-tooltip]:hover::after {
+    transform: translate(0, -50%);
+  }
+
+  .inline-input {
+    background: transparent;
+    border: none;
+    outline: none;
+    width: 100%;
+    font: inherit;
+    color: inherit;
+    padding: 0;
+    margin: 0;
+    resize: none;
+  }
+
+  /* Grow-wrap: textarea que cresce exatamente com o conteúdo, sem pulo */
+  .grow-wrap {
+    display: grid;
+    width: 100%;
+  }
+  .grow-wrap::after {
+    content: attr(data-replicated-value) " ";
+    white-space: pre-wrap;
+    visibility: hidden;
+  }
+  .grow-wrap > textarea {
+    resize: none;
+    overflow: hidden;
+  }
+  .grow-wrap > textarea,
+  .grow-wrap::after {
+    grid-area: 1 / 1 / 2 / 2;
+    font: inherit;
+    line-height: inherit;
+    padding: 0;
+    margin: 0;
+    border: none;
+    background: transparent;
+    word-break: break-word;
+  }
+
+  .popover {
+    position: absolute;
+    z-index: 60;
+    background: white;
+    border: 1px solid rgba(15,15,15,.08);
+    border-radius: 10px;
+    box-shadow:
+      0 1px 2px rgba(15,15,15,.04),
+      0 8px 24px rgba(15,15,15,.10);
+    padding: 6px;
+    min-width: 280px;
+    animation: pop 100ms cubic-bezier(.2,.9,.2,1);
+  }
+  @keyframes pop {
+    from { opacity: 0; transform: translateY(-4px) scale(.98); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+  }
+
+  .pop-search {
+    width: 100%;
+    border: none;
+    outline: none;
+    padding: 6px 8px;
+    font-size: 13px;
+    border-radius: 6px;
+    background: rgba(15,15,15,.04);
+  }
+  .pop-search::placeholder { color: rgba(15,15,15,.4); }
+
+  .pop-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    color: #1f1f1f;
+    user-select: none;
+  }
+  .pop-item:hover { background: rgba(15,15,15,.05); }
+  .pop-item .check {
+    margin-left: auto;
+    opacity: 0;
+    color: #1f1f1f;
+  }
+  .pop-item.selected .check { opacity: 1; }
+
+  .pop-section {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: rgba(15,15,15,.45);
+    padding: 8px 8px 4px;
+    font-weight: 500;
+  }
+
+  .pop-scroll {
+    max-height: 240px;
+    overflow-y: auto;
+    margin-top: 4px;
+  }
+  .pop-scroll::-webkit-scrollbar { width: 8px; }
+  .pop-scroll::-webkit-scrollbar-thumb { background: rgba(15,15,15,.15); border-radius: 4px; }
+
+  .tag-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    border-radius: 5px;
+    font-size: 12px;
+    font-weight: 500;
+    background: #4579A6;
+    color: white;
+    line-height: 1.4;
+    white-space: nowrap;
+  }
+  .tag-pill .remove {
+    cursor: pointer;
+    opacity: .6;
+    margin-left: 2px;
+  }
+  .tag-pill .remove:hover { opacity: 1; }
+
+  /* Pill de status (e select genérico) — mesmos metrics do tag-pill pra alinhar o texto */
+  .status-pill {
+    display: inline-flex;
+    align-items: center;
+    vertical-align: middle;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1.4;
+    white-space: nowrap;
+  }
+
+  .person-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: rgba(15,15,15,.05);
+    font-size: 12px;
+    color: #1f1f1f;
+  }
+  .avatar {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 9px;
+    color: white;
+    font-weight: 600;
+    flex-shrink: 0;
+  }
+  .avatar-lg { width: 22px; height: 22px; font-size: 10px; }
+
+  .cal-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 2px;
+  }
+  .cal-cell {
+    aspect-ratio: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    font-size: 12px;
+    cursor: pointer;
+    color: #1f1f1f;
+    user-select: none;
+  }
+  .cal-cell:hover { background: rgba(15,15,15,.06); }
+  .cal-cell.muted { color: rgba(15,15,15,.3); }
+  .cal-cell.today { color: var(--accent); font-weight: 600; }
+  .cal-cell.selected {
+    background: #1f1f1f;
+    color: white;
+  }
+  .cal-cell.head {
+    font-size: 10px;
+    text-transform: uppercase;
+    color: rgba(15,15,15,.45);
+    cursor: default;
+    font-weight: 500;
+  }
+  .cal-cell.head:hover { background: transparent; }
+
+  .empty-hint { color: rgba(15,15,15,.4); font-style: normal; }
+
+  .icon-btn {
+    padding: 4px;
+    border-radius: 6px;
+    color: rgba(15,15,15,.55);
+    transition: background-color 120ms;
+  }
+  .icon-btn:hover { background: rgba(15,15,15,.06); color: #1f1f1f; }
+
+  /* Floating actions — container agrupado que aparece no hover do card */
+  .card-root { position: relative; }
+  .card-root .floating-actions {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    background: white;
+    border: 1px solid rgba(15,15,15,.08);
+    border-radius: 8px;
+    padding: 2px;
+    box-shadow:
+      0 1px 2px rgba(15,15,15,.04),
+      0 2px 6px rgba(15,15,15,.06);
+    opacity: 0;
+    transform: translateY(-2px);
+    transition: opacity 120ms ease, transform 120ms ease;
+    z-index: 10;
+  }
+  .card-root:hover .floating-actions {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  .action-btn {
+    padding: 4px;
+    border-radius: 5px;
+    color: rgba(15,15,15,.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 120ms ease, color 120ms ease;
+  }
+  .action-btn:hover {
+    background: rgba(15,15,15,.05);
+    color: #1f1f1f;
+  }
+
+  /* Checkbox de seleção do card (anima width pra empurrar o conteúdo à direita no hover) */
+  .card-select-checkbox {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 0;
+    height: 16px;
+    border: 1.5px solid transparent;
+    border-radius: 3px;
+    background: transparent;
+    padding: 0;
+    cursor: pointer;
+    flex-shrink: 0;
+    overflow: hidden;
+    opacity: 0;
+    margin-right: 0;
+    transition:
+      width 180ms cubic-bezier(.2, .9, .3, 1),
+      margin-right 180ms cubic-bezier(.2, .9, .3, 1),
+      opacity 140ms ease,
+      background-color 120ms ease,
+      border-color 120ms ease;
+  }
+  /* Estado visível (hover na linha do título) — checkbox ainda não marcado: stroke cinza neutro */
+  [data-prop="titulo"]:hover .card-select-checkbox:not(.checked) {
+    width: 16px;
+    margin-right: 6px;
+    opacity: 1;
+    background: white;
+    border-color: rgba(15,15,15,.25);
+  }
+  /* Em edição, o checkbox some pra não competir com a UI de edição */
+  [data-prop="titulo"].editing .card-select-checkbox:not(.checked) {
+    width: 0;
+    margin-right: 0;
+    opacity: 0;
+    border-color: transparent;
+  }
+  .card-select-checkbox:hover:not(.checked) {
+    border-color: rgba(15,15,15,.45);
+  }
+  /* Estado marcado: preenchimento teal (vence sobre o hover do card) */
+  .card-select-checkbox.checked {
+    width: 16px;
+    margin-right: 6px;
+    opacity: 1;
+    background: #3A9B9E;
+    border-color: #3A9B9E;
+  }
+  .card-select-checkbox svg {
+    width: 11px;
+    height: 11px;
+    color: white;
+    opacity: 0;
+  }
+  .card-select-checkbox.checked svg { opacity: 1; }
+
+  /* Card: hover apenas cresce; stroke teal só quando selecionado via checkbox */
+  .card-root {
+    transition: border-color 150ms ease, transform 150ms ease-out;
+    transform-origin: 50% 50%;
+  }
+  .card-root:hover {
+    transform: scale(1.005);
+  }
+  .card-root.selected {
+    border-color: #3A9B9E;
+  }
+
+  /* Título: condensado em até 2 linhas */
+  .titulo-text {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    line-height: 1.4;
+    min-width: 0;
+  }
+  /* Checkbox alinhado com a 1ª linha do título */
+  [data-prop="titulo"] .card-select-checkbox {
+    margin-top: 1px;
+  }
+
+  /* Objeto: trunca em 3 linhas com reticência */
+  .objeto-clamp {
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  /* Preview com o texto completo ao passar o mouse */
+  .objeto-preview {
+    display: none;
+    position: absolute;
+    z-index: 60;
+    top: calc(100% - 4px);
+    left: 0;
+    width: 300px;
+    max-width: 92vw;
+    padding: 10px 12px;
+    background: #fff;
+    border: 1px solid rgba(15, 15, 15, .1);
+    border-radius: 8px;
+    box-shadow: 0 4px 6px rgba(15, 15, 15, .04), 0 12px 28px rgba(15, 15, 15, .16);
+    font-size: 12px;
+    font-weight: 400;
+    line-height: 1.55;
+    color: #1f1f1f;
+    white-space: normal;
+    text-align: left;
+    pointer-events: none;
+  }
+  [data-prop="objeto"]:hover .objeto-preview {
+    display: block;
+  }
+  /* Suprime o preview durante edição inline ou drag */
+  [data-prop="objeto"].editing .objeto-preview,
+  body.is-dragging .objeto-preview {
+    display: none !important;
+  }
+
+</style>
+</head>
+<body style="background:#F5F5F5; margin: 0; min-height: 100vh;">
+
+<div style="min-height: 100vh; display: flex; align-items: center; justify-content: center;">
+  <div class="flex flex-col items-center gap-3">
+    <div id="cardRoot" style="width: 342px;"></div>
+    <button id="addPropertyBtn" class="add-property-btn">
+      <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+      <span>Adicionar propriedade</span>
+    </button>
+  </div>
+</div>
+
+<script>
+// ===== STATE =====
+const state = {
+  titulo: 'Locação de software integrado de gestão pública — Pacatuba/SE',
+  codigoEdital: '90001/2026',
+  segmentos: ['Tecnologia da Informação e Comunicação', 'Materiais de Construção e Engenharia Civil', 'Equipamentos e Suprimentos Médico-Hospitalares'],
+  orgao: 'Universidade Federal de Mato Grosso',
+  objeto: '[LICITANET] - SISTEMA DE REGISTRO DE PREÇOS VISANDO A FUTURA E EVENTUAL CONTRATAÇÃO DE EMPRESA ESPECIALIZADA NA PRESTAÇÃO DE SERVIÇOS DE LOCAÇÃO DE SOFTWARE INTEGRADO DE GESTÃO PÚBLICA, DESTINADO A ATENDER ÀS DEMANDAS DA ADMINISTRAÇÃO PÚBLICA MUNICIPAL DE PACATUBA/SE, CONFORME ESPECIFICAÇÕES CONTIDAS NO TERMO DE REFERÊNCIA.',
+  status: 'em-disputa',
+  responsaveis: [1, 2, 3],
+  dataEnvio: '2026-04-25',
+  cidade: 'Paripiranga',
+  estado: 'BA',
+  valorGlobal: 220965.46,
+  itensMatch: 12,
+  demoProperties: [], // propriedades adicionadas via "Adicionar propriedade"
+  propertyOrder: [],  // ordem custom das propriedades; vazio = ordem padrão
+  selected: false,    // estado de seleção do card (checkbox no hover)
+};
+
+const statusDisponiveis = [
+  { id: 'abertas',    label: 'Abertas para participação', bg: '#dcfce7', text: '#15803d' },
+  { id: 'em-disputa', label: 'Em disputa ou Homologação', bg: '#fef3c7', text: '#b45309' },
+  { id: 'suspensa',   label: 'Suspensa',                  bg: '#fef3c7', text: '#b45309' },
+  { id: 'anulada',    label: 'Anulada',                   bg: '#fee2e2', text: '#dc2626' },
+  { id: 'revogada',   label: 'Revogada',                  bg: '#fee2e2', text: '#dc2626' },
+  { id: 'homologada', label: 'Homologada',                bg: '#dcfce7', text: '#15803d' },
+  { id: 'deserta',    label: 'Deserta ou Fracassada',     bg: '#fee2e2', text: '#dc2626' },
+];
+const getStatus = (id) => statusDisponiveis.find(s => s.id === id);
+
+const segmentosDisponiveis = [
+  'Tecnologia', 'Materiais', 'Saúde', 'Educação',
+  'Engenharia', 'Serviços', 'Construção', 'Alimentação',
+  'Tecnologia da Informação e Comunicação',
+  'Materiais de Construção e Engenharia Civil',
+  'Equipamentos e Suprimentos Médico-Hospitalares'
+];
+
+// Cor de fundo por segmento (paleta cíclica caso surjam novos)
+const segmentoCores = {
+  'Tecnologia':  '#4579A6', // category-blue
+  'Materiais':   '#694500', // category-amber
+  'Saúde':       '#2B6339', // category-green
+  'Educação':    '#46467D', // category-indigo
+  'Engenharia':  '#A26053', // category-red
+  'Serviços':    '#835B8E', // category-purple
+  'Construção':  '#707735', // category-olive
+  'Alimentação': '#783B54', // category-pink
+  'Tecnologia da Informação e Comunicação':         '#4579A6', // blue
+  'Materiais de Construção e Engenharia Civil':      '#707735', // olive
+  'Equipamentos e Suprimentos Médico-Hospitalares':  '#2B6339', // green
+};
+const PALETA_SEGMENTOS = ['#4579A6', '#46467D', '#835B8E', '#783B54', '#A26053', '#694500', '#2B6339', '#707735'];
+function corDoSegmento(nome) {
+  if (segmentoCores[nome]) return segmentoCores[nome];
+  const idx = segmentosDisponiveis.indexOf(nome);
+  return PALETA_SEGMENTOS[(idx >= 0 ? idx : 0) % PALETA_SEGMENTOS.length];
+}
+
+const pessoas = [
+  { id: 1, nome: 'Juliana Santos', cor: '#f59e0b' },
+  { id: 2, nome: 'Fabio Almeida Pereira', cor: '#10b981' },
+  { id: 3, nome: 'Mateus Silva', cor: '#3b82f6' },
+  { id: 4, nome: 'Ana Costa', cor: '#ec4899' },
+  { id: 5, nome: 'Pedro Lima', cor: '#8b5cf6' },
+  { id: 6, nome: 'Carla Mendes', cor: '#06b6d4' },
+  { id: 7, nome: 'Rafael Oliveira', cor: '#ef4444' },
+];
+
+const estados = ['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO'];
+
+// ===== HELPERS =====
+const $ = (sel, root=document) => root.querySelector(sel);
+const initials = (name) => name.split(' ').map(p => p[0]).slice(0,2).join('').toUpperCase();
+const formatCurrency = (v) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+// Safe wrapper — doesn't break if Lucide CDN fails to load
+const safeCreateIcons = () => {
+  if (typeof lucide !== 'undefined' && lucide.createIcons) {
+    try { lucide.createIcons(); } catch (e) { /* silent */ }
+  }
+};
+const formatDateBR = (iso) => {
+  const [y,m,d] = iso.split('-');
+  return `${d}/${m}/${y}`;
+};
+const getDateState = (iso) => {
+  const target = new Date(iso + 'T00:00:00');
+  const today = new Date(); today.setHours(0,0,0,0);
+  const diff = (target - today) / 86400000;
+  if (diff < 0)  return 'overdue';  // já passou → vermelho
+  if (diff <= 7) return 'urgent';   // próxima → laranja
+  return 'normal';
+};
+const dateClasses = {
+  overdue: 'text-red-600 font-medium',
+  urgent:  'text-amber-600 font-medium',
+  normal:  'text-zinc-900',
+};
+const personById = (id) => pessoas.find(p => p.id === id);
+
+function closeAllPopovers() {
+  document.querySelectorAll('.popover').forEach(el => el.remove());
+  document.querySelectorAll('.prop.editing').forEach(el => el.classList.remove('editing'));
+}
+
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.popover') && !e.target.closest('[data-prop]')) {
+    closeAllPopovers();
+  }
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeAllPopovers();
+});
+
+// ===== POPOVER =====
+function showPopover(anchorEl, htmlOrNode, opts={}) {
+  closeAllPopovers();
+  anchorEl.classList.add('editing');
+
+  const pop = document.createElement('div');
+  pop.className = 'popover';
+  if (typeof htmlOrNode === 'string') pop.innerHTML = htmlOrNode;
+  else pop.appendChild(htmlOrNode);
+
+  document.body.appendChild(pop);
+
+  const rect = anchorEl.getBoundingClientRect();
+  pop.style.top  = (rect.bottom + window.scrollY + 4) + 'px';
+  pop.style.left = (rect.left + window.scrollX) + 'px';
+  pop.style.minWidth = Math.max(rect.width, 280) + 'px';
+
+  // Reposition if overflows viewport
+  const popRect = pop.getBoundingClientRect();
+  if (popRect.right > window.innerWidth - 8) {
+    pop.style.left = (window.innerWidth - popRect.width - 8 + window.scrollX) + 'px';
+  }
+  if (popRect.bottom > window.innerHeight - 8) {
+    pop.style.top = (rect.top + window.scrollY - popRect.height - 4) + 'px';
+  }
+
+  if (opts.onMount) opts.onMount(pop);
+  safeCreateIcons();
+  return pop;
+}
+
+// ===== RENDER =====
+function render() {
+  const root = $('#cardRoot');
+  const dateState = getDateState(state.dataEnvio);
+  const responsaveisVisiveis = state.responsaveis.map(personById).filter(Boolean);
+  const status = getStatus(state.status);
+
+  root.innerHTML = `
+    <div class="card-root bg-white rounded-xl border border-[#E5E5E5]${state.selected ? ' selected' : ''}">
+      <!-- Ações flutuantes (aparecem no hover) -->
+      <div class="floating-actions">
+        <button class="action-btn" title="Copiar link"><i data-lucide="link" class="w-3.5 h-3.5"></i></button>
+      </div>
+
+      <!-- Body -->
+      <div class="px-2.5 pt-2.5 pb-2.5 space-y-0.5" id="cardBody">
+        ${getCardProperties().map(renderCardProperty).join('')}
+      </div>
+    </div>
+  `;
+
+  safeCreateIcons();
+  bindPropHandlers();
+}
+
+
+// =====================================================================
+// PROPRIEDADES DO CARD — arranjadas em array para suportar drag-and-drop
+// =====================================================================
+function getCardProperties() {
+  const dateState = getDateState(state.dataEnvio);
+  const responsaveisVisiveis = state.responsaveis.map(personById).filter(Boolean);
+  const status = getStatus(state.status);
+
+  const props = [
+    {
+      key: 'titulo', tooltip: 'Título da licitação',
+      attrs: 'data-prop="titulo"',
+      classes: 'prop px-2 py-1.5 text-[13px] text-zinc-900 font-semibold',
+      content: `
+        <span class="flex items-start">
+          <button type="button" class="card-select-checkbox${state.selected ? ' checked' : ''}" data-card-select aria-label="Selecionar card">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="20 6 9 17 4 12"/>
+            </svg>
+          </button>
+          <span class="titulo-text">${state.titulo || '<span class="empty-hint">Sem título</span>'}</span>
+        </span>
+      `,
+    },
+    {
+      key: 'codigoEdital', tooltip: 'Número do edital',
+      attrs: 'data-prop="codigoEdital"',
+      classes: 'prop px-2 py-1.5 text-[13px] text-zinc-900',
+      content: `Edital <span class="font-mono">${state.codigoEdital || '<span class="empty-hint">—</span>'}</span>`,
+    },
+    {
+      key: 'segmentos', tooltip: 'Segmento',
+      attrs: 'data-prop="segmentos"',
+      classes: 'prop px-2 py-1.5',
+      content: `<div class="flex flex-wrap items-center gap-1.5 min-h-[22px]">
+        ${state.segmentos.length
+          ? state.segmentos.map(s => `<span class="tag-pill" style="background:${corDoSegmento(s)}">${s}</span>`).join('')
+          : '<span class="text-xs empty-hint">Adicionar segmento</span>'}
+      </div>`,
+    },
+    {
+      key: 'orgao', tooltip: 'Nome do Órgão',
+      attrs: 'data-prop="orgao"',
+      classes: 'prop px-2 py-1.5 text-[13px] text-zinc-900 leading-snug font-semibold',
+      content: state.orgao || '<span class="empty-hint">Vazio</span>',
+    },
+    {
+      key: 'objeto', tooltip: 'Objeto da licitação',
+      attrs: 'data-prop="objeto"',
+      classes: 'prop px-2 py-1.5 text-[13px] text-zinc-900 leading-snug relative',
+      content: state.objeto
+        ? `<span class="objeto-clamp">${state.objeto.replace(/</g, '&lt;')}</span>
+           <div class="objeto-preview">${state.objeto.replace(/</g, '&lt;')}</div>`
+        : '<span class="empty-hint">Vazio</span>',
+    },
+    {
+      key: 'status', tooltip: 'Status do edital',
+      attrs: 'data-prop="status"',
+      classes: 'prop px-2 py-1.5',
+      content: `<div class="flex items-center min-h-[22px]">${status
+        ? `<span class="status-pill" style="background:${status.bg};color:${status.text}">${status.label}</span>`
+        : '<span class="text-xs empty-hint">Definir status</span>'}</div>`,
+    },
+    {
+      key: 'responsaveis', tooltip: 'Responsável',
+      attrs: 'data-prop="responsaveis"',
+      classes: 'prop px-2 py-1.5',
+      content: `<div class="flex flex-wrap items-center gap-1">
+        ${responsaveisVisiveis.length
+          ? responsaveisVisiveis.map(p => `<span class="person-chip">${p.nome}</span>`).join('')
+          : '<span class="text-xs empty-hint">Sem responsáveis</span>'}
+      </div>`,
+    },
+    {
+      key: 'dataEnvio', tooltip: 'Data de envio da proposta',
+      attrs: 'data-prop="dataEnvio"',
+      classes: `prop px-2 py-1.5 text-[13px] ${dateClasses[dateState]}`,
+      content: formatDateBR(state.dataEnvio),
+    },
+    {
+      key: 'cidade', tooltip: 'Cidade / Estado',
+      attrs: 'data-prop="cidade"',
+      classes: 'prop px-2 py-1.5 text-[13px] text-zinc-900',
+      content: `${state.cidade} • ${state.estado}`,
+    },
+    {
+      key: 'valor', tooltip: 'Valor global',
+      attrs: 'data-prop="valor"',
+      classes: 'prop px-2 py-1.5 text-[13px] text-zinc-900',
+      content: formatCurrency(state.valorGlobal),
+    },
+    {
+      key: 'itensMatch', tooltip: 'Itens com correspondência',
+      attrs: '',
+      classes: 'prop-static px-2 py-1.5 text-[13px] text-zinc-900 font-semibold',
+      content: `${state.itensMatch} ${state.itensMatch === 1 ? 'item' : 'itens'} com correspondência`,
+    },
+  ];
+
+  // Demo properties
+  state.demoProperties.forEach(demo => {
+    const config = TYPE_REGISTRY[demo.type];
+    if (!config) return;
+    const isReadOnly = config.readOnly;
+    const valueHtml = config.render.call(config, demo.value);
+    props.push({
+      key: demo.id,
+      tooltip: config.label,
+      attrs: isReadOnly ? '' : `data-demo-prop="${demo.id}"`,
+      classes: `${isReadOnly ? 'prop-static' : 'prop'} px-2 py-1.5 text-[13px] text-zinc-900 pr-7`,
+      content: `${valueHtml}
+        <button class="demo-remove" data-remove="${demo.id}" title="Remover">
+          <svg viewBox="0 0 24 24" width="11" height="11" stroke="currentColor" stroke-width="2" fill="none">
+            <path d="M18 6 6 18"/><path d="m6 6 12 12"/>
+          </svg>
+        </button>`,
+    });
+  });
+
+  // Aplica ordem custom se houver
+  if (state.propertyOrder && state.propertyOrder.length) {
+    const orderMap = new Map(state.propertyOrder.map((k, i) => [k, i]));
+    props.sort((a, b) => {
+      const ai = orderMap.has(a.key) ? orderMap.get(a.key) : 9999;
+      const bi = orderMap.has(b.key) ? orderMap.get(b.key) : 9999;
+      return ai - bi;
+    });
+  }
+  return props;
+}
+
+function renderCardProperty(p) {
+  const tooltipAttr = p.tooltip ? `data-tooltip="${p.tooltip}"` : '';
+  return `
+    <div ${p.attrs} ${tooltipAttr} data-property-key="${p.key}" class="${p.classes} property-row">
+      ${p.content}
+    </div>
+  `;
+}
+
+function bindPropHandlers() {
+  const root = document.getElementById('cardRoot');
+  if (!root) return;
+
+  // Static properties
+  root.querySelectorAll('[data-prop]').forEach(el => {
+    el.addEventListener('click', (e) => {
+      if (wasDragging) return;
+      e.stopPropagation();
+      const prop = el.dataset.prop;
+      const editors = {
+        titulo: editTitulo,
+        codigoEdital: editCodigoEdital,
+        segmentos: editSegmentos,
+        orgao: editOrgao,
+        objeto: editObjeto,
+        status: editStatus,
+        responsaveis: editResponsaveis,
+        dataEnvio: editDataEnvio,
+        cidade: editCidade,
+        valor: editValor,
+        itensMatch: editItensMatch,
+      };
+      editors[prop]?.(el);
+    });
+  });
+
+  // Demo properties — abrir editor genérico baseado no tipo
+  root.querySelectorAll('[data-demo-prop]').forEach(el => {
+    el.addEventListener('click', (e) => {
+      if (wasDragging) return;
+      if (e.target.closest('[data-remove]')) return;
+      if (e.target.closest('[data-drag-handle]')) return;
+      e.stopPropagation();
+      const demoId = el.dataset.demoProp;
+      const demo = state.demoProperties.find(d => d.id === demoId);
+      if (!demo) return;
+      const config = TYPE_REGISTRY[demo.type];
+      if (!config || !config.edit) return;
+      const editorFn = GENERIC_EDITORS[config.edit];
+      if (editorFn) editorFn(el, demo);
+    });
+  });
+
+  // Remover demo property
+  root.querySelectorAll('[data-remove]').forEach(el => {
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      removeDemoProperty(el.dataset.remove);
+    });
+  });
+
+  // Checkbox de seleção do card (toggle do state.selected)
+  root.querySelectorAll('[data-card-select]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      state.selected = !state.selected;
+      btn.classList.toggle('checked');
+      const cardRoot = root.querySelector('.card-root');
+      if (cardRoot) cardRoot.classList.toggle('selected', state.selected);
+    });
+  });
+
+  // Drag em qualquer propriedade (clique e segure + movimento inicia drag)
+  root.querySelectorAll('.property-row').forEach(row => {
+    row.addEventListener('mousedown', (e) => {
+      // Ignora cliques em botões internos (demo-remove, button-type property)
+      if (e.target.closest('button')) return;
+      // Ignora se row já está em edição (popover aberto, input ativo)
+      if (row.classList.contains('editing')) return;
+      // Ignora botões do mouse que não são o esquerdo
+      if (e.button !== 0) return;
+      // Previne seleção de texto do navegador durante o arraste potencial
+      e.preventDefault();
+      startPotentialDrag(e, row);
+    });
+  });
+}
+
+// =====================================================================
+// DRAG-AND-DROP — clique e segure em qualquer propriedade para arrastar.
+// Drag só inicia se o cursor se mover além de um threshold pequeno.
+// Usa ghost flutuante + placeholder + FLIP animation para UX fluida.
+// =====================================================================
+let dragState = null;
+let wasDragging = false;
+const DRAG_THRESHOLD = 4; // pixels antes de considerar drag
+
+function startPotentialDrag(e, row) {
+  const startX = e.clientX;
+  const startY = e.clientY;
+  let active = false;
+
+  const onMove = (ev) => {
+    if (active) {
+      ev.preventDefault();
+      onDragMove(ev);
+      return;
+    }
+    const dx = Math.abs(ev.clientX - startX);
+    const dy = Math.abs(ev.clientY - startY);
+    if (dx > DRAG_THRESHOLD || dy > DRAG_THRESHOLD) {
+      active = true;
+      ev.preventDefault();
+      beginDrag(row, ev);
+      onDragMove(ev); // Move o ghost para o cursor imediatamente
+    }
+  };
+
+  const onUp = () => {
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('mouseup', onUp);
+    if (active) finalizeDrag();
+  };
+
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('mouseup', onUp);
+}
+
+function beginDrag(row, e) {
+  closeAllPopovers();
+  const body = document.getElementById('cardBody');
+  if (!body) return;
+
+  // Limpa transforms residuais de drags anteriores que ainda estejam ativos
+  Array.from(body.children).forEach(c => {
+    c.style.transform = '';
+    c.style.transition = '';
+  });
+
+  const rect = row.getBoundingClientRect();
+
+  console.log('[DRAG] beginDrag', {
+    'event clientX': e.clientX,
+    'event clientY': e.clientY,
+    'rect.top': rect.top,
+    'rect.left': rect.left,
+    'rect.width': rect.width,
+    'rect.height': rect.height,
+  });
+
+  // Cria o ghost (clone visual que segue o cursor)
+  const ghost = row.cloneNode(true);
+  // Remove atributos que poderiam disparar regras CSS (tooltip, etc) no ghost
+  ghost.removeAttribute('data-property-key');
+  ghost.removeAttribute('data-tooltip');
+  ghost.removeAttribute('data-prop');
+  ghost.querySelectorAll('[data-tooltip], [data-prop], [data-demo-prop]').forEach(el => {
+    el.removeAttribute('data-tooltip');
+    el.removeAttribute('data-prop');
+    el.removeAttribute('data-demo-prop');
+  });
+  ghost.classList.remove('property-row', 'prop', 'prop-static');
+  ghost.classList.add('drag-ghost');
+  ghost.style.width = rect.width + 'px';
+  ghost.style.height = rect.height + 'px';
+  ghost.style.top = rect.top + 'px';
+  ghost.style.left = rect.left + 'px';
+  ghost.style.padding = window.getComputedStyle(row).padding;
+  document.body.appendChild(ghost);
+
+  // DEBUG: onde o ghost realmente está depois de inserido?
+  const ghostRect = ghost.getBoundingClientRect();
+  const cs = window.getComputedStyle(ghost);
+  console.log('[DRAG] ghost actual', {
+    expected_top: rect.top,
+    expected_left: rect.left,
+    actual_top: ghostRect.top,
+    actual_left: ghostRect.left,
+    actual_width: ghostRect.width,
+    actual_height: ghostRect.height,
+    display: cs.display,
+    visibility: cs.visibility,
+    opacity: cs.opacity,
+    position: cs.position,
+    transform: cs.transform,
+    'computed top': cs.top,
+    'computed left': cs.left,
+    parent: ghost.parentElement && ghost.parentElement.tagName,
+  });
+
+  // O row original vira placeholder vazio mantendo a mesma altura
+  row.classList.add('drag-placeholder');
+
+  dragState = {
+    row,
+    body,
+    ghost,
+    offsetX: e.clientX - rect.left,
+    offsetY: e.clientY - rect.top,
+  };
+
+  document.body.classList.add('is-dragging');
+}
+
+function onDragMove(e) {
+  if (!dragState) return;
+  const { row, body, ghost, offsetX, offsetY } = dragState;
+
+  // 1. Move o ghost com o cursor (top/left)
+  const x = e.clientX - offsetX;
+  const y = e.clientY - offsetY;
+  ghost.style.left = x + 'px';
+  ghost.style.top  = y + 'px';
+
+  if (!window.__lastDragLog || Date.now() - window.__lastDragLog > 200) {
+    console.log('[DRAG] onDragMove', { x, y, eClientX: e.clientX, eClientY: e.clientY, offsetX, offsetY });
+    window.__lastDragLog = Date.now();
+  }
+
+  const others = Array.from(body.children).filter(c =>
+    c.classList.contains('property-row') && c !== row
+  );
+
+  // 2. Determina qual irmão será o "antes" do row
+  let targetSibling = null;
+  for (const other of others) {
+    const r = other.getBoundingClientRect();
+    if (e.clientY < r.top + r.height / 2) {
+      targetSibling = other;
+      break;
+    }
+  }
+
+  // Sai se a posição não mudou
+  if (row.nextElementSibling === targetSibling) return;
+
+  // 3. FLIP — captura posições antes da reordenação
+  const before = new Map();
+  others.forEach(o => before.set(o, o.getBoundingClientRect().top));
+
+  // Reordena o placeholder no DOM
+  if (targetSibling) body.insertBefore(row, targetSibling);
+  else               body.appendChild(row);
+
+  // FLIP — calcula o delta e anima de volta pra 0
+  others.forEach(o => {
+    const dy = before.get(o) - o.getBoundingClientRect().top;
+    if (dy === 0) return;
+    o.style.transition = 'none';
+    o.style.transform = `translateY(${dy}px)`;
+    // Force reflow para o transform ser aplicado antes da transition
+    o.getBoundingClientRect();
+    o.style.transition = 'transform 200ms cubic-bezier(.2, .9, .3, 1)';
+    o.style.transform = '';
+  });
+}
+
+function finalizeDrag() {
+  if (!dragState) return;
+  const { row, body, ghost } = dragState;
+
+  // Captura a nova ordem
+  state.propertyOrder = Array.from(body.children)
+    .filter(c => c.classList.contains('property-row'))
+    .map(c => c.dataset.propertyKey);
+
+  // Anima o ghost até a posição final do placeholder (via top/left)
+  const placeholderRect = row.getBoundingClientRect();
+  ghost.style.transition = 'top 160ms cubic-bezier(.2, .9, .3, 1), left 160ms cubic-bezier(.2, .9, .3, 1), transform 160ms ease';
+  ghost.style.top  = placeholderRect.top + 'px';
+  ghost.style.left = placeholderRect.left + 'px';
+  ghost.style.transform = 'rotate(0deg)';
+
+  // Após a animação, faz a troca final
+  setTimeout(() => {
+    ghost.remove();
+    row.classList.remove('drag-placeholder');
+    document.body.classList.remove('is-dragging');
+    // Limpa transforms dos vizinhos
+    Array.from(body.children).forEach(c => {
+      c.style.transform = '';
+      c.style.transition = '';
+    });
+    dragState = null;
+    render();
+  }, 160);
+
+  wasDragging = true;
+  setTimeout(() => { wasDragging = false; }, 210);
+}
+
+// ===== EDITORS =====
+
+// --- Código do edital (texto inline) ---
+// --- Título (textarea, comporta 2 linhas) ---
+function editTitulo(anchor) {
+  closeAllPopovers();
+  anchor.classList.add('editing');
+  const original = state.titulo || '';
+
+  anchor.innerHTML = `
+    <div class="grow-wrap text-[13px] text-zinc-900 leading-snug font-semibold" data-replicated-value="${original.replace(/"/g, '&quot;')}">
+      <textarea class="inline-input" rows="1">${original}</textarea>
+    </div>
+  `;
+  const wrapper = anchor.querySelector('.grow-wrap');
+  const ta = anchor.querySelector('textarea');
+
+  ta.focus();
+  ta.setSelectionRange(ta.value.length, ta.value.length);
+
+  ta.addEventListener('input', () => {
+    wrapper.dataset.replicatedValue = ta.value;
+  });
+
+  const commit = (save) => {
+    state.titulo = save ? ta.value.trim() : original;
+    render();
+  };
+  ta.addEventListener('blur', () => commit(true));
+  ta.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); ta.blur(); }
+    if (e.key === 'Escape') commit(false);
+  });
+}
+
+function editCodigoEdital(anchor) {
+  closeAllPopovers();
+  anchor.classList.add('editing');
+  const original = state.codigoEdital;
+  anchor.innerHTML = `<input class="inline-input text-[13px] text-zinc-900 font-mono" value="${original}" />`;
+  const input = anchor.querySelector('input');
+  input.focus();
+  input.select();
+
+  const commit = (save) => {
+    state.codigoEdital = save ? input.value.trim() || original : original;
+    render();
+  };
+  input.addEventListener('blur', () => commit(true));
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+    if (e.key === 'Escape') { commit(false); }
+  });
+}
+
+// --- Órgão (textarea) ---
+function editOrgao(anchor) {
+  closeAllPopovers();
+  anchor.classList.add('editing');
+  const original = state.orgao;
+
+  // Wrapper grow-wrap + textarea: o pseudo-element define a altura
+  // exata do conteúdo, e o textarea preenche sem pulo nem diferença.
+  anchor.innerHTML = `
+    <div class="grow-wrap text-[13px] text-zinc-900 leading-snug font-semibold" data-replicated-value="${original.replace(/"/g, '&quot;')}">
+      <textarea class="inline-input" rows="1">${original}</textarea>
+    </div>
+  `;
+  const wrapper = anchor.querySelector('.grow-wrap');
+  const ta = anchor.querySelector('textarea');
+
+  ta.focus();
+  ta.setSelectionRange(ta.value.length, ta.value.length);
+
+  ta.addEventListener('input', () => {
+    wrapper.dataset.replicatedValue = ta.value;
+  });
+
+  const commit = (save) => {
+    state.orgao = save ? ta.value.trim() : original;
+    render();
+  };
+  ta.addEventListener('blur', () => commit(true));
+  ta.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); ta.blur(); }
+    if (e.key === 'Escape') commit(false);
+  });
+}
+
+// --- Objeto (textarea, sem bold) ---
+function editObjeto(anchor) {
+  closeAllPopovers();
+  anchor.classList.add('editing');
+  const original = state.objeto || '';
+
+  // Mesmo padrão grow-wrap do Órgão: durante a edição o textarea
+  // expande para o texto completo (sem clamp), facilitando a leitura.
+  anchor.innerHTML = `
+    <div class="grow-wrap text-[13px] text-zinc-900 leading-snug" data-replicated-value="${original.replace(/"/g, '&quot;')}">
+      <textarea class="inline-input" rows="1">${original}</textarea>
+    </div>
+  `;
+  const wrapper = anchor.querySelector('.grow-wrap');
+  const ta = anchor.querySelector('textarea');
+
+  ta.focus();
+  ta.setSelectionRange(ta.value.length, ta.value.length);
+
+  ta.addEventListener('input', () => {
+    wrapper.dataset.replicatedValue = ta.value;
+  });
+
+  const commit = (save) => {
+    state.objeto = save ? ta.value.trim() : original;
+    render();
+  };
+  ta.addEventListener('blur', () => commit(true));
+  ta.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); ta.blur(); }
+    if (e.key === 'Escape') commit(false);
+  });
+}
+function editSegmentos(anchor) {
+  let query = '';
+  const renderList = (pop) => {
+    const filtered = segmentosDisponiveis.filter(s =>
+      s.toLowerCase().includes(query.toLowerCase())
+    );
+    const showCreate = query && !segmentosDisponiveis.some(s => s.toLowerCase() === query.toLowerCase());
+
+    pop.querySelector('.pop-scroll').innerHTML = `
+      ${state.segmentos.length ? `
+        <div class="pop-section">Selecionados</div>
+        ${state.segmentos.map(s => `
+          <div class="pop-item selected" data-action="toggle" data-val="${s}">
+            <span class="tag-pill" style="background:${corDoSegmento(s)}">${s}</span>
+            <i data-lucide="check" class="check w-3.5 h-3.5"></i>
+          </div>
+        `).join('')}
+      ` : ''}
+      ${filtered.filter(s => !state.segmentos.includes(s)).length ? `
+        <div class="pop-section">Disponíveis</div>
+        ${filtered.filter(s => !state.segmentos.includes(s)).map(s => `
+          <div class="pop-item" data-action="toggle" data-val="${s}">
+            <span class="tag-pill" style="background:${corDoSegmento(s)}">${s}</span>
+          </div>
+        `).join('')}
+      ` : ''}
+      ${showCreate ? `
+        <div class="pop-section">Criar</div>
+        <div class="pop-item" data-action="create" data-val="${query}">
+          <i data-lucide="plus" class="w-3.5 h-3.5 text-zinc-500"></i>
+          <span>Criar "<strong>${query}</strong>"</span>
+        </div>
+      ` : ''}
+    `;
+    safeCreateIcons();
+  };
+
+  const pop = showPopover(anchor, `
+    <input class="pop-search" placeholder="Buscar ou criar segmento..." />
+    <div class="pop-scroll"></div>
+  `, {
+    onMount: (pop) => {
+      const search = pop.querySelector('.pop-search');
+      search.focus();
+      search.addEventListener('input', (e) => {
+        query = e.target.value;
+        renderList(pop);
+      });
+      pop.addEventListener('click', (e) => {
+        const item = e.target.closest('[data-action]');
+        if (!item) return;
+        const val = item.dataset.val;
+        if (item.dataset.action === 'toggle') {
+          state.segmentos = state.segmentos.includes(val)
+            ? state.segmentos.filter(s => s !== val)
+            : [...state.segmentos, val];
+        } else if (item.dataset.action === 'create') {
+          segmentosDisponiveis.push(val);
+          state.segmentos.push(val);
+          query = '';
+          search.value = '';
+        }
+        // re-render card silently
+        render();
+        anchor = document.querySelector('[data-prop="segmentos"]');
+        anchor.classList.add('editing');
+        renderList(pop);
+        search.focus();
+      });
+      renderList(pop);
+    }
+  });
+}
+
+// --- Responsáveis ---
+function editResponsaveis(anchor) {
+  let query = '';
+  const renderList = (pop) => {
+    const filtered = pessoas.filter(p =>
+      p.nome.toLowerCase().includes(query.toLowerCase())
+    );
+    pop.querySelector('.pop-scroll').innerHTML = `
+      ${filtered.map(p => {
+        const isSelected = state.responsaveis.includes(p.id);
+        return `
+          <div class="pop-item ${isSelected ? 'selected' : ''}" data-id="${p.id}">
+            <span>${p.nome}</span>
+            <i data-lucide="check" class="check w-3.5 h-3.5"></i>
+          </div>
+        `;
+      }).join('') || '<div class="px-2 py-3 text-xs text-zinc-400 text-center">Nenhuma pessoa encontrada</div>'}
+    `;
+    safeCreateIcons();
+  };
+
+  const pop = showPopover(anchor, `
+    <input class="pop-search" placeholder="Buscar pessoa..." />
+    <div class="pop-scroll"></div>
+  `, {
+    onMount: (pop) => {
+      const search = pop.querySelector('.pop-search');
+      search.focus();
+      search.addEventListener('input', (e) => {
+        query = e.target.value;
+        renderList(pop);
+      });
+      pop.addEventListener('click', (e) => {
+        const item = e.target.closest('[data-id]');
+        if (!item) return;
+        const id = parseInt(item.dataset.id);
+        state.responsaveis = state.responsaveis.includes(id)
+          ? state.responsaveis.filter(x => x !== id)
+          : [...state.responsaveis, id];
+        render();
+        anchor = document.querySelector('[data-prop="responsaveis"]');
+        anchor.classList.add('editing');
+        renderList(pop);
+        search.focus();
+      });
+      renderList(pop);
+    }
+  });
+}
+
+// --- Prazo (calendário) ---
+let calMonth, calYear;
+function editDataEnvio(anchor) {
+  const [y, m] = state.dataEnvio.split('-').map(Number);
+  calMonth = m - 1;
+  calYear  = y;
+
+  const renderCal = (pop) => {
+    const meses = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+    const diasSemana = ['D','S','T','Q','Q','S','S'];
+    const firstDay = new Date(calYear, calMonth, 1).getDay();
+    const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
+    const daysInPrev  = new Date(calYear, calMonth, 0).getDate();
+    const today = new Date(); today.setHours(0,0,0,0);
+    const selected = state.dataEnvio;
+
+    let cells = '';
+    // Headers
+    cells += diasSemana.map(d => `<div class="cal-cell head">${d}</div>`).join('');
+    // Days from previous month
+    for (let i = firstDay - 1; i >= 0; i--) {
+      cells += `<div class="cal-cell muted">${daysInPrev - i}</div>`;
+    }
+    // Days from current month
+    for (let d = 1; d <= daysInMonth; d++) {
+      const iso = `${calYear}-${String(calMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+      const isToday = new Date(iso).getTime() === today.getTime();
+      const isSelected = iso === selected;
+      cells += `<div class="cal-cell ${isToday ? 'today' : ''} ${isSelected ? 'selected' : ''}" data-iso="${iso}">${d}</div>`;
+    }
+    // Trailing days
+    const totalCells = firstDay + daysInMonth;
+    const trailing = (7 - (totalCells % 7)) % 7;
+    for (let d = 1; d <= trailing; d++) {
+      cells += `<div class="cal-cell muted">${d}</div>`;
+    }
+
+    pop.querySelector('.cal-body').innerHTML = `
+      <div class="flex items-center justify-between px-1 py-2">
+        <button class="icon-btn" data-nav="-1"><i data-lucide="chevron-left" class="w-4 h-4"></i></button>
+        <div class="text-xs font-medium text-zinc-700">${meses[calMonth]} ${calYear}</div>
+        <button class="icon-btn" data-nav="1"><i data-lucide="chevron-right" class="w-4 h-4"></i></button>
+      </div>
+      <div class="cal-grid">${cells}</div>
+      <div class="flex items-center justify-between mt-2 pt-2 border-t border-zinc-100">
+        <button class="text-xs text-zinc-600 hover:text-zinc-900 px-2 py-1" data-action="today">Hoje</button>
+        <button class="text-xs text-zinc-600 hover:text-zinc-900 px-2 py-1" data-action="clear">Limpar</button>
+      </div>
+    `;
+    safeCreateIcons();
+  };
+
+  const pop = showPopover(anchor, `<div class="cal-body" style="min-width:240px"></div>`, {
+    onMount: (pop) => {
+      renderCal(pop);
+      pop.addEventListener('click', (e) => {
+        const nav = e.target.closest('[data-nav]');
+        if (nav) {
+          calMonth += parseInt(nav.dataset.nav);
+          if (calMonth < 0) { calMonth = 11; calYear--; }
+          if (calMonth > 11) { calMonth = 0; calYear++; }
+          renderCal(pop);
+          return;
+        }
+        const cell = e.target.closest('[data-iso]');
+        if (cell) {
+          state.dataEnvio = cell.dataset.iso;
+          closeAllPopovers();
+          render();
+          return;
+        }
+        const action = e.target.closest('[data-action]');
+        if (action?.dataset.action === 'today') {
+          const t = new Date();
+          state.dataEnvio = `${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')}`;
+          closeAllPopovers();
+          render();
+        }
+      });
+    }
+  });
+}
+
+// --- Cidade e Estado ---
+function editCidade(anchor) {
+  const pop = showPopover(anchor, `
+    <div class="px-2 pt-2 pb-1">
+      <label class="text-[10px] uppercase tracking-wide text-zinc-500 font-medium">Cidade</label>
+      <input class="inline-input mt-0.5 text-sm w-full px-2 py-1.5 rounded border border-zinc-200 focus:border-blue-500" data-field="cidade" value="${state.cidade}" />
+    </div>
+    <div class="px-2 pt-1 pb-2">
+      <label class="text-[10px] uppercase tracking-wide text-zinc-500 font-medium">Estado</label>
+      <select class="inline-input mt-0.5 text-sm w-full px-2 py-1.5 rounded border border-zinc-200 focus:border-blue-500 bg-white" data-field="estado">
+        ${estados.map(uf => `<option value="${uf}" ${uf === state.estado ? 'selected' : ''}>${uf}</option>`).join('')}
+      </select>
+    </div>
+    <div class="border-t border-zinc-100 px-2 py-1.5 flex justify-end gap-1">
+      <button class="text-xs px-2 py-1 rounded hover:bg-zinc-100" data-action="cancel">Cancelar</button>
+      <button class="text-xs px-2 py-1 rounded bg-zinc-900 text-white hover:bg-zinc-700" data-action="save">Salvar</button>
+    </div>
+  `, {
+    onMount: (pop) => {
+      const inputCidade = pop.querySelector('[data-field="cidade"]');
+      const selectEstado = pop.querySelector('[data-field="estado"]');
+      inputCidade.focus();
+      inputCidade.select();
+      pop.addEventListener('click', (e) => {
+        const action = e.target.closest('[data-action]');
+        if (!action) return;
+        if (action.dataset.action === 'save') {
+          state.cidade = inputCidade.value.trim() || state.cidade;
+          state.estado = selectEstado.value;
+        }
+        closeAllPopovers();
+        render();
+      });
+      pop.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          state.cidade = inputCidade.value.trim() || state.cidade;
+          state.estado = selectEstado.value;
+          closeAllPopovers();
+          render();
+        }
+      });
+    }
+  });
+}
+
+// --- Valor global ---
+function editValor(anchor) {
+  closeAllPopovers();
+  anchor.classList.add('editing');
+  const original = state.valorGlobal;
+  anchor.innerHTML = `
+    <div class="flex items-baseline gap-1">
+      <span class="text-[13px] text-zinc-500">R$</span>
+      <input class="inline-input text-[13px] text-zinc-900" type="text" value="${original.toString().replace('.', ',')}" />
+    </div>
+  `;
+  const input = anchor.querySelector('input');
+  input.focus();
+  input.select();
+
+  const commit = (save) => {
+    if (save) {
+      const parsed = parseFloat(input.value.replace(/\./g, '').replace(',', '.'));
+      if (!isNaN(parsed)) state.valorGlobal = parsed;
+    }
+    render();
+  };
+  input.addEventListener('blur', () => commit(true));
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+    if (e.key === 'Escape') commit(false);
+  });
+}
+
+// --- Status do edital (single-select) ---
+function editStatus(anchor) {
+  const renderList = (pop) => {
+    pop.querySelector('.pop-scroll').innerHTML = `
+      ${statusDisponiveis.map(s => `
+        <div class="pop-item ${s.id === state.status ? 'selected' : ''}" data-id="${s.id}">
+          <span class="status-pill"
+                style="background:${s.bg};color:${s.text}">${s.label}</span>
+          <i data-lucide="check" class="check w-3.5 h-3.5"></i>
+        </div>
+      `).join('')}
+      ${state.status ? `
+        <div class="border-t border-zinc-100 mt-1 pt-1">
+          <div class="pop-item" data-id="">
+            <i data-lucide="x" class="w-3.5 h-3.5 text-zinc-500"></i>
+            <span class="text-zinc-600">Limpar status</span>
+          </div>
+        </div>
+      ` : ''}
+    `;
+    safeCreateIcons();
+  };
+
+  showPopover(anchor, `<div class="pop-scroll" style="max-height:none"></div>`, {
+    onMount: (pop) => {
+      renderList(pop);
+      pop.addEventListener('click', (e) => {
+        const item = e.target.closest('[data-id]');
+        if (!item) return;
+        state.status = item.dataset.id || null;
+        closeAllPopovers();
+        render();
+      });
+    }
+  });
+}
+
+// --- Itens com correspondência (número inline) ---
+function editItensMatch(anchor) {
+  closeAllPopovers();
+  anchor.classList.add('editing');
+  const original = state.itensMatch;
+  anchor.innerHTML = `
+    <div class="flex items-baseline gap-1.5">
+      <input type="number" min="0" class="inline-input text-[13px] text-zinc-900" style="max-width: 50px" value="${original}" />
+      <span class="text-[13px] text-zinc-500">itens com correspondência</span>
+    </div>
+  `;
+  const input = anchor.querySelector('input');
+  input.focus();
+  input.select();
+
+  const commit = (save) => {
+    if (save) {
+      const parsed = parseInt(input.value);
+      if (!isNaN(parsed) && parsed >= 0) state.itensMatch = parsed;
+    }
+    render();
+  };
+  input.addEventListener('blur', () => commit(true));
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+    if (e.key === 'Escape') commit(false);
+  });
+}
+
+// =====================================================================
+// TYPE REGISTRY — 23 tipos do Notion. Cada um define como renderiza no
+// card e qual editor genérico abre quando clicado.
+// =====================================================================
+const TYPE_REGISTRY = {
+  text: {
+    label: 'Texto', icon: 'align-left',
+    defaultValue: 'Texto de exemplo',
+    render: (v) => v || '<span class="empty-hint">Vazio</span>',
+    edit: 'genericText',
+  },
+  number: {
+    label: 'Número', icon: 'hash',
+    defaultValue: 42,
+    render: (v) => (v ?? '') !== '' ? v : '<span class="empty-hint">Vazio</span>',
+    edit: 'genericNumber',
+  },
+  select: {
+    label: 'Select', icon: 'chevron-down-circle',
+    defaultValue: 'Opção 1',
+    options: ['Opção 1', 'Opção 2', 'Opção 3'],
+    render: (v) => v
+      ? `<span class="status-pill" style="background:#dbeafe;color:#1e40af">${v}</span>`
+      : '<span class="empty-hint">Vazio</span>',
+    edit: 'genericSelect',
+  },
+  'multi-select': {
+    label: 'Multi-select', icon: 'list',
+    defaultValue: ['Tag 1', 'Tag 2'],
+    options: ['Tag 1', 'Tag 2', 'Tag 3', 'Tag 4', 'Tag 5'],
+    render: (v) => v.length
+      ? `<div class="flex flex-wrap gap-1">${v.map(t => `<span class="tag-pill">${t}</span>`).join('')}</div>`
+      : '<span class="empty-hint">Vazio</span>',
+    edit: 'genericMultiSelect',
+  },
+  date: {
+    label: 'Data', icon: 'calendar',
+    defaultValue: '2026-06-15',
+    render: (v) => v ? formatDateBR(v) : '<span class="empty-hint">Vazio</span>',
+    edit: 'genericDate',
+  },
+  person: {
+    label: 'Pessoa', icon: 'users',
+    defaultValue: [1, 2],
+    render(v) {
+      const list = v.map(id => personById(id)).filter(Boolean);
+      return list.length
+        ? `<div class="flex flex-wrap gap-1">${list.map(p => `<span class="person-chip">${p.nome}</span>`).join('')}</div>`
+        : '<span class="empty-hint">Sem pessoas</span>';
+    },
+    edit: 'genericPerson',
+  },
+  'files-media': {
+    label: 'Arquivos e mídia', icon: 'paperclip',
+    defaultValue: [],
+    render: (v) => v.length
+      ? `<span class="inline-flex items-center gap-1.5 text-zinc-700"><svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="2" fill="none"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 17.93 8.8l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>${v.length} arquivo${v.length > 1 ? 's' : ''}</span>`
+      : '<span class="empty-hint">Anexar arquivo</span>',
+    edit: 'genericFiles',
+  },
+  checkbox: {
+    label: 'Caixa de seleção', icon: 'square-check',
+    defaultValue: true,
+    render: (v) => `<span class="checkbox-toggle ${v ? 'checked' : ''}">${v ? '<svg viewBox="0 0 24 24" width="10" height="10" stroke="currentColor" stroke-width="3" fill="none"><polyline points="20 6 9 17 4 12"/></svg>' : ''}</span>`,
+    edit: 'genericCheckbox',
+  },
+  url: {
+    label: 'URL', icon: 'link',
+    defaultValue: 'https://exemplo.com',
+    render: (v) => v ? `<span class="underline text-blue-600">${v}</span>` : '<span class="empty-hint">Vazio</span>',
+    edit: 'genericText',
+  },
+  email: {
+    label: 'Email', icon: 'at-sign',
+    defaultValue: 'usuario@empresa.com',
+    render: (v) => v ? `<span class="underline text-blue-600">${v}</span>` : '<span class="empty-hint">Vazio</span>',
+    edit: 'genericText',
+  },
+  phone: {
+    label: 'Telefone', icon: 'phone',
+    defaultValue: '+55 (11) 99999-9999',
+    render: (v) => v || '<span class="empty-hint">Vazio</span>',
+    edit: 'genericText',
+  },
+  'last-edited-by': {
+    label: 'Editado por', icon: 'user-circle',
+    defaultValue: 2,
+    readOnly: true,
+    render(v) {
+      const p = personById(v);
+      return p ? `<span class="person-chip">${p.nome}</span>` : '';
+    },
+  },
+  button: {
+    label: 'Botão', icon: 'mouse-pointer-click',
+    defaultValue: 'Enviar proposta',
+    render: (v) => `<button class="px-2.5 py-1 bg-zinc-900 text-white text-[12px] rounded hover:bg-zinc-700" onclick="event.stopPropagation()">${v}</button>`,
+    edit: 'genericButton',
+  },
+  place: {
+    label: 'Lugar', icon: 'map-pin',
+    defaultValue: 'Avenida Paulista, 1578',
+    render: (v) => v || '<span class="empty-hint">Vazio</span>',
+    edit: 'genericText',
+  },
+};
+
+// =====================================================================
+// DEMO PROPERTY MANAGEMENT
+// =====================================================================
+function renderDemoProperty(demo) {
+  const config = TYPE_REGISTRY[demo.type];
+  if (!config) return '';
+  const isReadOnly = config.readOnly;
+  const valueHtml = config.render.call(config, demo.value);
+  const containerClass = isReadOnly ? 'prop-static' : 'prop';
+  const editAttr = isReadOnly ? '' : `data-demo-prop="${demo.id}"`;
+  return `
+    <div ${editAttr} data-tooltip="${config.label}" class="${containerClass} px-2 py-1.5 text-[13px] text-zinc-900 pr-7">
+      ${valueHtml}
+      <button class="demo-remove" data-remove="${demo.id}" title="Remover">
+        <svg viewBox="0 0 24 24" width="11" height="11" stroke="currentColor" stroke-width="2" fill="none">
+          <path d="M18 6 6 18"/><path d="m6 6 12 12"/>
+        </svg>
+      </button>
+    </div>
+  `;
+}
+
+function addDemoProperty(typeId) {
+  const config = TYPE_REGISTRY[typeId];
+  if (!config) return;
+  let value = config.defaultValue;
+  if (Array.isArray(value)) value = [...value];
+  const demo = {
+    id: 'demo-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7),
+    type: typeId,
+    value,
+  };
+  state.demoProperties.push(demo);
+  render();
+  // Abre o editor imediatamente se for editável
+  if (!config.readOnly) {
+    setTimeout(() => {
+      const el = document.querySelector(`[data-demo-prop="${demo.id}"]`);
+      if (el) el.click();
+    }, 60);
+  }
+}
+
+function removeDemoProperty(id) {
+  state.demoProperties = state.demoProperties.filter(d => d.id !== id);
+  render();
+}
+
+// =====================================================================
+// GENERIC EDITORS — usados por demo properties (TYPE_REGISTRY.edit)
+// =====================================================================
+const GENERIC_EDITORS = {};
+
+GENERIC_EDITORS.genericText = (anchor, demo) => {
+  closeAllPopovers();
+  anchor.classList.add('editing');
+  const original = demo.value || '';
+  anchor.innerHTML = `<input class="inline-input text-[13px] text-zinc-900" value="${original.replace(/"/g, '&quot;')}" />`;
+  const input = anchor.querySelector('input');
+  input.focus();
+  input.select();
+  const commit = (save) => {
+    if (save) demo.value = input.value;
+    render();
+  };
+  input.addEventListener('blur', () => commit(true));
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+    if (e.key === 'Escape') commit(false);
+  });
+};
+
+GENERIC_EDITORS.genericNumber = (anchor, demo) => {
+  closeAllPopovers();
+  anchor.classList.add('editing');
+  const original = demo.value;
+  anchor.innerHTML = `<input type="number" class="inline-input text-[13px] text-zinc-900" value="${original}" />`;
+  const input = anchor.querySelector('input');
+  input.focus();
+  input.select();
+  const commit = (save) => {
+    if (save) {
+      const n = parseFloat(input.value);
+      if (!isNaN(n)) demo.value = n;
+    }
+    render();
+  };
+  input.addEventListener('blur', () => commit(true));
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+    if (e.key === 'Escape') commit(false);
+  });
+};
+
+GENERIC_EDITORS.genericCheckbox = (anchor, demo) => {
+  demo.value = !demo.value;
+  render();
+};
+
+GENERIC_EDITORS.genericSelect = (anchor, demo) => {
+  const config = TYPE_REGISTRY[demo.type];
+  let query = '';
+  const renderList = (pop) => {
+    const filtered = config.options.filter(o => o.toLowerCase().includes(query.toLowerCase()));
+    pop.querySelector('.pop-scroll').innerHTML = filtered.map(opt => `
+      <div class="pop-item ${opt === demo.value ? 'selected' : ''}" data-val="${opt}">
+        <span class="status-pill" style="background:#dbeafe;color:#1e40af">${opt}</span>
+        <i data-lucide="check" class="check w-3.5 h-3.5"></i>
+      </div>
+    `).join('') || '<div class="px-2 py-3 text-xs text-zinc-400 text-center">Sem opções</div>';
+    safeCreateIcons();
+  };
+  showPopover(anchor, `
+    <input class="pop-search" placeholder="Buscar..." />
+    <div class="pop-scroll"></div>
+  `, {
+    onMount: (pop) => {
+      const search = pop.querySelector('.pop-search');
+      search.focus();
+      search.addEventListener('input', (e) => { query = e.target.value; renderList(pop); });
+      pop.addEventListener('click', (e) => {
+        const item = e.target.closest('[data-val]');
+        if (!item) return;
+        demo.value = item.dataset.val;
+        closeAllPopovers();
+        render();
+      });
+      renderList(pop);
+    }
+  });
+};
+
+GENERIC_EDITORS.genericMultiSelect = (anchor, demo) => {
+  const config = TYPE_REGISTRY[demo.type];
+  const isRelation = demo.type === 'relation';
+  let query = '';
+  const renderList = (pop) => {
+    const filtered = config.options.filter(o => o.toLowerCase().includes(query.toLowerCase()));
+    pop.querySelector('.pop-scroll').innerHTML = filtered.map(opt => {
+      const isSel = demo.value.includes(opt);
+      return `
+        <div class="pop-item ${isSel ? 'selected' : ''}" data-val="${opt}">
+          ${isRelation
+            ? `<span class="text-[13px] text-zinc-900">↗ ${opt}</span>`
+            : `<span class="tag-pill">${opt}</span>`}
+          <i data-lucide="check" class="check w-3.5 h-3.5"></i>
+        </div>
+      `;
+    }).join('') || '<div class="px-2 py-3 text-xs text-zinc-400 text-center">Sem opções</div>';
+    safeCreateIcons();
+  };
+  showPopover(anchor, `
+    <input class="pop-search" placeholder="Buscar..." />
+    <div class="pop-scroll"></div>
+  `, {
+    onMount: (pop) => {
+      const search = pop.querySelector('.pop-search');
+      search.focus();
+      search.addEventListener('input', (e) => { query = e.target.value; renderList(pop); });
+      pop.addEventListener('click', (e) => {
+        const item = e.target.closest('[data-val]');
+        if (!item) return;
+        const val = item.dataset.val;
+        demo.value = demo.value.includes(val)
+          ? demo.value.filter(x => x !== val)
+          : [...demo.value, val];
+        render();
+        const newAnchor = document.querySelector(`[data-demo-prop="${demo.id}"]`);
+        if (newAnchor) newAnchor.classList.add('editing');
+        renderList(pop);
+        search.focus();
+      });
+      renderList(pop);
+    }
+  });
+};
+
+GENERIC_EDITORS.genericStatus = (anchor, demo) => {
+  const config = TYPE_REGISTRY[demo.type];
+  const renderList = (pop) => {
+    pop.querySelector('.pop-scroll').innerHTML = config.options.map(o => `
+      <div class="pop-item ${o.id === demo.value ? 'selected' : ''}" data-val="${o.id}">
+        <span class="status-pill" style="background:${o.bg};color:${o.text}">${o.label}</span>
+        <i data-lucide="check" class="check w-3.5 h-3.5"></i>
+      </div>
+    `).join('');
+    safeCreateIcons();
+  };
+  showPopover(anchor, `<div class="pop-scroll" style="max-height:none"></div>`, {
+    onMount: (pop) => {
+      renderList(pop);
+      pop.addEventListener('click', (e) => {
+        const item = e.target.closest('[data-val]');
+        if (!item) return;
+        demo.value = item.dataset.val;
+        closeAllPopovers();
+        render();
+      });
+    }
+  });
+};
+
+GENERIC_EDITORS.genericDate = (anchor, demo) => {
+  let [y, m] = demo.value.split('-').map(Number);
+  let calM = m - 1, calY = y;
+  const renderCal = (pop) => {
+    const meses = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+    const diasSemana = ['D','S','T','Q','Q','S','S'];
+    const firstDay = new Date(calY, calM, 1).getDay();
+    const daysInMonth = new Date(calY, calM + 1, 0).getDate();
+    const daysInPrev  = new Date(calY, calM, 0).getDate();
+    const today = new Date(); today.setHours(0,0,0,0);
+    const selected = demo.value;
+    let cells = diasSemana.map(d => `<div class="cal-cell head">${d}</div>`).join('');
+    for (let i = firstDay - 1; i >= 0; i--) cells += `<div class="cal-cell muted">${daysInPrev - i}</div>`;
+    for (let d = 1; d <= daysInMonth; d++) {
+      const iso = `${calY}-${String(calM+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+      const isToday = new Date(iso).getTime() === today.getTime();
+      const isSelected = iso === selected;
+      cells += `<div class="cal-cell ${isToday ? 'today' : ''} ${isSelected ? 'selected' : ''}" data-iso="${iso}">${d}</div>`;
+    }
+    const totalCells = firstDay + daysInMonth;
+    const trailing = (7 - (totalCells % 7)) % 7;
+    for (let d = 1; d <= trailing; d++) cells += `<div class="cal-cell muted">${d}</div>`;
+    pop.querySelector('.cal-body').innerHTML = `
+      <div class="flex items-center justify-between px-1 py-2">
+        <button class="icon-btn" data-nav="-1"><i data-lucide="chevron-left" class="w-4 h-4"></i></button>
+        <div class="text-xs font-medium text-zinc-700">${meses[calM]} ${calY}</div>
+        <button class="icon-btn" data-nav="1"><i data-lucide="chevron-right" class="w-4 h-4"></i></button>
+      </div>
+      <div class="cal-grid">${cells}</div>
+    `;
+    safeCreateIcons();
+  };
+  showPopover(anchor, `<div class="cal-body" style="min-width:240px"></div>`, {
+    onMount: (pop) => {
+      renderCal(pop);
+      pop.addEventListener('click', (e) => {
+        const nav = e.target.closest('[data-nav]');
+        if (nav) {
+          calM += parseInt(nav.dataset.nav);
+          if (calM < 0) { calM = 11; calY--; }
+          if (calM > 11) { calM = 0; calY++; }
+          renderCal(pop);
+          return;
+        }
+        const cell = e.target.closest('[data-iso]');
+        if (cell) {
+          demo.value = cell.dataset.iso;
+          closeAllPopovers();
+          render();
+        }
+      });
+    }
+  });
+};
+
+GENERIC_EDITORS.genericPerson = (anchor, demo) => {
+  let query = '';
+  const renderList = (pop) => {
+    const filtered = pessoas.filter(p => p.nome.toLowerCase().includes(query.toLowerCase()));
+    pop.querySelector('.pop-scroll').innerHTML = filtered.map(p => {
+      const isSel = demo.value.includes(p.id);
+      return `
+        <div class="pop-item ${isSel ? 'selected' : ''}" data-id="${p.id}">
+          <span>${p.nome}</span>
+          <i data-lucide="check" class="check w-3.5 h-3.5"></i>
+        </div>
+      `;
+    }).join('') || '<div class="px-2 py-3 text-xs text-zinc-400 text-center">Nenhuma pessoa encontrada</div>';
+    safeCreateIcons();
+  };
+  showPopover(anchor, `
+    <input class="pop-search" placeholder="Buscar pessoa..." />
+    <div class="pop-scroll"></div>
+  `, {
+    onMount: (pop) => {
+      const search = pop.querySelector('.pop-search');
+      search.focus();
+      search.addEventListener('input', (e) => { query = e.target.value; renderList(pop); });
+      pop.addEventListener('click', (e) => {
+        const item = e.target.closest('[data-id]');
+        if (!item) return;
+        const id = parseInt(item.dataset.id);
+        demo.value = demo.value.includes(id)
+          ? demo.value.filter(x => x !== id)
+          : [...demo.value, id];
+        render();
+        const newAnchor = document.querySelector(`[data-demo-prop="${demo.id}"]`);
+        if (newAnchor) newAnchor.classList.add('editing');
+        renderList(pop);
+        search.focus();
+      });
+      renderList(pop);
+    }
+  });
+};
+
+GENERIC_EDITORS.genericFiles = (anchor, demo) => {
+  showPopover(anchor, `
+    <div class="px-2 pt-2 pb-1">
+      <div class="border border-dashed border-zinc-300 rounded-md p-3 text-center cursor-pointer hover:bg-zinc-50" data-add-file>
+        <i data-lucide="upload" class="w-5 h-5 mx-auto text-zinc-400 mb-1"></i>
+        <div class="text-[12px] text-zinc-600">Arraste arquivos aqui</div>
+        <div class="text-[10px] text-zinc-400 mt-0.5">ou clique para simular upload</div>
+      </div>
+      ${demo.value.length ? `
+        <div class="mt-2 space-y-1">
+          ${demo.value.map((f, i) => `
+            <div class="flex items-center gap-2 px-2 py-1 bg-zinc-50 rounded text-[12px]">
+              <i data-lucide="file" class="w-3 h-3 text-zinc-500"></i>
+              <span class="flex-1 text-zinc-700 truncate">${f}</span>
+              <button data-remove-file="${i}" class="text-zinc-400 hover:text-zinc-700">
+                <svg viewBox="0 0 24 24" width="11" height="11" stroke="currentColor" stroke-width="2" fill="none"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+              </button>
+            </div>
+          `).join('')}
+        </div>
+      ` : ''}
+    </div>
+  `, {
+    onMount: (pop) => {
+      safeCreateIcons();
+      pop.querySelector('[data-add-file]').addEventListener('click', () => {
+        demo.value = [...demo.value, `documento-${demo.value.length + 1}.pdf`];
+        closeAllPopovers();
+        render();
+        // Reabrir o popover para mostrar o estado atualizado
+        setTimeout(() => {
+          const el = document.querySelector(`[data-demo-prop="${demo.id}"]`);
+          if (el) el.click();
+        }, 60);
+      });
+      pop.querySelectorAll('[data-remove-file]').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const i = parseInt(btn.dataset.removeFile);
+          demo.value = demo.value.filter((_, idx) => idx !== i);
+          closeAllPopovers();
+          render();
+        });
+      });
+    }
+  });
+};
+
+GENERIC_EDITORS.genericButton = (anchor, demo) => {
+  closeAllPopovers();
+  anchor.classList.add('editing');
+  const original = demo.value;
+  anchor.innerHTML = `
+    <div class="flex items-center gap-1.5">
+      <span class="text-[11px] text-zinc-500">Label:</span>
+      <input class="inline-input text-[13px] text-zinc-900" value="${original.replace(/"/g, '&quot;')}" />
+    </div>
+  `;
+  const input = anchor.querySelector('input');
+  input.focus();
+  input.select();
+  const commit = (save) => {
+    if (save) demo.value = input.value.trim() || original;
+    render();
+  };
+  input.addEventListener('blur', () => commit(true));
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+    if (e.key === 'Escape') commit(false);
+  });
+};
+
+// =====================================================================
+// MENU "ADICIONAR PROPRIEDADE" — lista todos os 23 tipos do TYPE_REGISTRY
+// =====================================================================
+function openAddPropertyMenu(btn) {
+  let query = '';
+  const types = Object.entries(TYPE_REGISTRY);
+
+  const renderList = (pop) => {
+    const filtered = types.filter(([_, c]) =>
+      c.label.toLowerCase().includes(query.toLowerCase())
+    );
+    pop.querySelector('.pop-scroll').innerHTML = filtered.length
+      ? filtered.map(([id, c]) => `
+          <div class="pop-item" data-type="${id}">
+            <i data-lucide="${c.icon}" class="w-3.5 h-3.5 text-zinc-500 shrink-0"></i>
+            <span class="flex-1 text-[13px] text-zinc-900">${c.label}</span>
+            ${c.readOnly ? '<span class="text-[10px] text-zinc-400 uppercase tracking-wide">auto</span>' : ''}
+          </div>
+        `).join('')
+      : '<div class="px-2 py-3 text-xs text-zinc-400 text-center">Nenhum tipo encontrado</div>';
+    safeCreateIcons();
+  };
+
+  showPopover(btn, `
+    <input class="pop-search" placeholder="Buscar tipo..." />
+    <div class="pop-section">Tipo</div>
+    <div class="pop-scroll" style="max-height: 320px"></div>
+  `, {
+    onMount: (pop) => {
+      const search = pop.querySelector('.pop-search');
+      search.focus();
+      search.addEventListener('input', (e) => {
+        query = e.target.value;
+        renderList(pop);
+      });
+      pop.addEventListener('click', (e) => {
+        const item = e.target.closest('[data-type]');
+        if (!item) return;
+        const typeId = item.dataset.type;
+        closeAllPopovers();
+        addDemoProperty(typeId);
+      });
+      renderList(pop);
+    }
+  });
+}
+
+document.getElementById('addPropertyBtn').addEventListener('click', (e) => {
+  e.stopPropagation();
+  openAddPropertyMenu(e.currentTarget);
+});
+
+// ===== INIT =====
+render();
+
+// ===== Hydration API (specifc to kanban detail panel) =====
+// `state`, `render`, `pessoas` são const top-level e não vivem em `window.*`.
+// Esta API expõe um hook mínimo pra views consumidoras (kanban) injetarem dados.
+window.__cardAPI = {
+  setPessoas(list) {
+    if (!Array.isArray(list)) return;
+    pessoas.length = 0;
+    list.forEach(p => pessoas.push(p));
+  },
+  setState(next) {
+    if (!next || typeof next !== 'object') return;
+    Object.assign(state, next);
+    render();
+  }
+};
+window.dispatchEvent(new Event('card-api-ready'));
+</script>
+
+</body>
+</html>
