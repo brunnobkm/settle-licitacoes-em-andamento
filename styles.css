@@ -356,6 +356,7 @@ button { font-family: inherit; cursor: pointer; }
 .status-wrap { display: flex; align-items: center; min-height: 22px; }
 .status-pill {
   display: inline-flex; align-items: center;
+  vertical-align: middle;
   padding: 2px 8px;
   border-radius: 4px;
   font-size: 12px; font-weight: 500;
@@ -748,3 +749,222 @@ button { font-family: inherit; cursor: pointer; }
   width: 100%;
   background: #FFFFFF;
 }
+
+/* =====================================================================
+   Inline edit (Notion-style) — portado de licitacoes-em-andamento-card/prototype.html
+   Click no .card-edit-target abre o popover; click fora ainda abre detail.
+   ===================================================================== */
+
+/* Override do hover do .prop pra ele NÃO destacar a row inteira — só o target */
+.prop:hover { background-color: transparent; }
+.prop.editing { background-color: #F5F5F5; }
+
+/* Target específico de edição — clique aqui = edita; click fora (área morta) = bubble pro card-root */
+.card-edit-target { cursor: pointer; }
+
+/* Bg hover só pra targets de texto (empty-hint, valor, data) — não pra chips coloridos */
+.card-edit-target:not(.tag-pill):not(.status-pill):not(.person-chip):hover {
+  background-color: rgba(15,15,15,.06);
+  border-radius: 4px;
+}
+
+/* Pills/chips coloridos: brightness filter em vez de bg overlay */
+.tag-pill.card-edit-target,
+.status-pill.card-edit-target,
+.person-chip.card-edit-target {
+  transition: filter 120ms ease;
+}
+.tag-pill.card-edit-target:hover,
+.status-pill.card-edit-target:hover,
+.person-chip.card-edit-target:hover {
+  filter: brightness(0.92);
+}
+
+/* Popover (anchored a um card-edit-target, position: fixed) */
+.popover {
+  position: fixed;
+  z-index: 60;
+  background: white;
+  border: 1px solid rgba(15,15,15,.08);
+  border-radius: 10px;
+  box-shadow:
+    0 1px 2px rgba(15,15,15,.04),
+    0 8px 24px rgba(15,15,15,.10);
+  padding: 6px;
+  min-width: 280px;
+  animation: pop 100ms cubic-bezier(.2,.9,.2,1);
+}
+@keyframes pop {
+  from { opacity: 0; transform: translateY(-4px) scale(.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.pop-search {
+  width: 100%;
+  border: none;
+  outline: none;
+  padding: 6px 8px;
+  font-size: 13px;
+  border-radius: 6px;
+  background: rgba(15,15,15,.04);
+  font-family: inherit;
+  color: var(--text);
+  box-sizing: border-box;
+}
+.pop-search::placeholder { color: rgba(15,15,15,.4); }
+
+.pop-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  color: #1f1f1f;
+  user-select: none;
+}
+.pop-item:hover { background: rgba(15,15,15,.05); }
+.pop-item .check {
+  margin-left: auto;
+  opacity: 0;
+  color: #1f1f1f;
+  width: 14px; height: 14px;
+  flex-shrink: 0;
+}
+.pop-item.selected .check { opacity: 1; }
+.pop-item .pop-item-label { flex: 1; }
+.pop-item .pop-item-icon {
+  width: 14px; height: 14px;
+  color: rgba(15,15,15,.5);
+  flex-shrink: 0;
+}
+
+.pop-section {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: rgba(15,15,15,.45);
+  padding: 8px 8px 4px;
+  font-weight: 500;
+}
+
+.pop-scroll {
+  max-height: 280px;
+  overflow-y: auto;
+  margin-top: 4px;
+}
+.pop-scroll::-webkit-scrollbar { width: 8px; }
+.pop-scroll::-webkit-scrollbar-thumb { background: rgba(15,15,15,.15); border-radius: 4px; }
+
+.pop-empty {
+  padding: 10px 8px;
+  font-size: 12px;
+  color: rgba(15,15,15,.45);
+  text-align: center;
+}
+
+.pop-divider {
+  border-top: 1px solid rgba(15,15,15,.06);
+  margin: 4px 0;
+}
+
+/* Editor inline (valor) — input que substitui o conteúdo do .card-edit-target */
+.inline-input {
+  background: transparent;
+  border: none;
+  outline: none;
+  width: 100%;
+  font: inherit;
+  color: inherit;
+  padding: 0;
+  margin: 0;
+  resize: none;
+  box-sizing: border-box;
+}
+
+.inline-value-wrap {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  font-size: 13px;
+  width: 100%;
+}
+.inline-value-wrap .inline-prefix { color: rgba(15,15,15,.5); }
+.inline-value-wrap .inline-input { min-width: 60px; }
+
+/* Mini-calendar dentro do popover (date picker) */
+.mini-cal {
+  min-width: 240px;
+  padding: 4px;
+}
+.mini-cal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 6px 8px;
+}
+.mini-cal-month {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text);
+}
+.mini-cal-nav {
+  width: 22px; height: 22px;
+  border: 0; background: transparent;
+  border-radius: 5px;
+  color: rgba(15,15,15,.55);
+  display: grid; place-items: center;
+  cursor: pointer;
+}
+.mini-cal-nav:hover { background: rgba(15,15,15,.06); color: var(--text); }
+.mini-cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+.mini-cal-cell {
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--text);
+  cursor: pointer;
+  user-select: none;
+}
+.mini-cal-cell:hover { background: rgba(15,15,15,.06); }
+.mini-cal-cell.head {
+  font-size: 10px;
+  text-transform: uppercase;
+  color: rgba(15,15,15,.45);
+  cursor: default;
+  font-weight: 500;
+}
+.mini-cal-cell.head:hover { background: transparent; }
+.mini-cal-cell.muted { color: rgba(15,15,15,.3); }
+.mini-cal-cell.today { color: var(--teal-accent); font-weight: 600; }
+.mini-cal-cell.selected {
+  background: #1f1f1f;
+  color: white;
+}
+.mini-cal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(15,15,15,.06);
+}
+.mini-cal-footer button {
+  border: 0;
+  background: transparent;
+  font-size: 12px;
+  color: rgba(15,15,15,.6);
+  padding: 4px 8px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-family: inherit;
+}
+.mini-cal-footer button:hover { background: rgba(15,15,15,.06); color: var(--text); }

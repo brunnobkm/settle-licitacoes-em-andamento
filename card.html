@@ -16,18 +16,38 @@
 
   .prop {
     transition: background-color 120ms ease;
-    cursor: pointer;
     border-radius: 6px;
     position: relative;
   }
-  .prop:hover { background-color: rgba(15,15,15,.035); }
+  /* Hover no row inteiro foi removido — agora só o .card-edit-target tem feedback */
   .prop.editing { background-color: #F5F5F5; }
 
-  /* Propriedade read-only — mantém tooltip, sem hover de edição */
+  /* Target específico de edição — clique aqui = edita; clique fora = abre detalhe */
+  .card-edit-target {
+    cursor: pointer;
+  }
+  /* Bg hover só pra targets de texto (empty-hint, valor, etc.) — não pra chips coloridos */
+  .card-edit-target:not(.tag-pill):not(.status-pill):not(.person-chip):hover {
+    background-color: rgba(15,15,15,.06);
+    border-radius: 4px;
+  }
+  /* Pills/chips coloridos: filtro sutil em vez de bg */
+  .tag-pill.card-edit-target,
+  .status-pill.card-edit-target,
+  .person-chip.card-edit-target {
+    transition: filter 120ms ease;
+  }
+  .tag-pill.card-edit-target:hover,
+  .status-pill.card-edit-target:hover,
+  .person-chip.card-edit-target:hover {
+    filter: brightness(0.92);
+  }
+
+  /* Propriedade "click-to-open detail" — sem hover de edição, herda cursor pointer do card */
   .prop-static {
     border-radius: 6px;
     position: relative;
-    cursor: default;
+    cursor: inherit;
   }
 
   /* Estado de drag */
@@ -462,6 +482,7 @@
 
   /* Card: hover apenas cresce; stroke teal só quando selecionado via checkbox */
   .card-root {
+    cursor: pointer;
     transition: border-color 150ms ease, transform 150ms ease-out;
     transform-origin: 50% 50%;
   }
@@ -642,7 +663,7 @@ const personById = (id) => pessoas.find(p => p.id === id);
 
 function closeAllPopovers() {
   document.querySelectorAll('.popover').forEach(el => el.remove());
-  document.querySelectorAll('.prop.editing').forEach(el => el.classList.remove('editing'));
+  document.querySelectorAll('.editing').forEach(el => el.classList.remove('editing'));
 }
 
 document.addEventListener('click', (e) => {
@@ -669,7 +690,7 @@ function showPopover(anchorEl, htmlOrNode, opts={}) {
   const rect = anchorEl.getBoundingClientRect();
   pop.style.top  = (rect.bottom + window.scrollY + 4) + 'px';
   pop.style.left = (rect.left + window.scrollX) + 'px';
-  pop.style.minWidth = Math.max(rect.width, 280) + 'px';
+  pop.style.minWidth = (opts.minWidth ?? Math.max(rect.width, 280)) + 'px';
 
   // Reposition if overflows viewport
   const popRect = pop.getBoundingClientRect();
@@ -697,6 +718,7 @@ function render() {
       <!-- Ações flutuantes (aparecem no hover) -->
       <div class="floating-actions">
         <button class="action-btn" title="Copiar link"><i data-lucide="link" class="w-3.5 h-3.5"></i></button>
+        <button class="action-btn" data-card-menu title="Mais opções"><i data-lucide="more-horizontal" class="w-3.5 h-3.5"></i></button>
       </div>
 
       <!-- Body -->
@@ -723,7 +745,7 @@ function getCardProperties() {
     {
       key: 'titulo', tooltip: 'Título da licitação',
       attrs: 'data-prop="titulo"',
-      classes: 'prop px-2 py-1.5 text-[13px] text-zinc-900 font-semibold',
+      classes: 'prop-static px-2 py-1.5 text-[13px] text-zinc-900 font-semibold',
       content: `
         <span class="flex items-start">
           <button type="button" class="card-select-checkbox${state.selected ? ' checked' : ''}" data-card-select aria-label="Selecionar card">
@@ -738,7 +760,7 @@ function getCardProperties() {
     {
       key: 'codigoEdital', tooltip: 'Número do edital',
       attrs: 'data-prop="codigoEdital"',
-      classes: 'prop px-2 py-1.5 text-[13px] text-zinc-900',
+      classes: 'prop-static px-2 py-1.5 text-[13px] text-zinc-900',
       content: `Edital <span class="font-mono">${state.codigoEdital || '<span class="empty-hint">—</span>'}</span>`,
     },
     {
@@ -747,20 +769,20 @@ function getCardProperties() {
       classes: 'prop px-2 py-1.5',
       content: `<div class="flex flex-wrap items-center gap-1.5 min-h-[22px]">
         ${state.segmentos.length
-          ? state.segmentos.map(s => `<span class="tag-pill" style="background:${corDoSegmento(s)}">${s}</span>`).join('')
-          : '<span class="text-xs empty-hint">Adicionar segmento</span>'}
+          ? state.segmentos.map(s => `<span class="tag-pill card-edit-target" style="background:${corDoSegmento(s)}">${s}</span>`).join('')
+          : '<span class="text-xs empty-hint card-edit-target">Adicionar segmento</span>'}
       </div>`,
     },
     {
       key: 'orgao', tooltip: 'Nome do Órgão',
       attrs: 'data-prop="orgao"',
-      classes: 'prop px-2 py-1.5 text-[13px] text-zinc-900 leading-snug font-semibold',
+      classes: 'prop-static px-2 py-1.5 text-[13px] text-zinc-900 leading-snug font-semibold',
       content: state.orgao || '<span class="empty-hint">Vazio</span>',
     },
     {
       key: 'objeto', tooltip: 'Objeto da licitação',
       attrs: 'data-prop="objeto"',
-      classes: 'prop px-2 py-1.5 text-[13px] text-zinc-900 leading-snug relative',
+      classes: 'prop-static px-2 py-1.5 text-[13px] text-zinc-900 leading-snug relative',
       content: state.objeto
         ? `<span class="objeto-clamp">${state.objeto.replace(/</g, '&lt;')}</span>
            <div class="objeto-preview">${state.objeto.replace(/</g, '&lt;')}</div>`
@@ -771,8 +793,8 @@ function getCardProperties() {
       attrs: 'data-prop="status"',
       classes: 'prop px-2 py-1.5',
       content: `<div class="flex items-center min-h-[22px]">${status
-        ? `<span class="status-pill" style="background:${status.bg};color:${status.text}">${status.label}</span>`
-        : '<span class="text-xs empty-hint">Definir status</span>'}</div>`,
+        ? `<span class="status-pill card-edit-target" style="background:${status.bg};color:${status.text}">${status.label}</span>`
+        : '<span class="text-xs empty-hint card-edit-target">Definir status</span>'}</div>`,
     },
     {
       key: 'responsaveis', tooltip: 'Responsável',
@@ -780,27 +802,27 @@ function getCardProperties() {
       classes: 'prop px-2 py-1.5',
       content: `<div class="flex flex-wrap items-center gap-1">
         ${responsaveisVisiveis.length
-          ? responsaveisVisiveis.map(p => `<span class="person-chip">${p.nome}</span>`).join('')
-          : '<span class="text-xs empty-hint">Sem responsáveis</span>'}
+          ? responsaveisVisiveis.map(p => `<span class="person-chip card-edit-target">${p.nome}</span>`).join('')
+          : '<span class="text-xs empty-hint card-edit-target">Sem responsáveis</span>'}
       </div>`,
     },
     {
       key: 'dataEnvio', tooltip: 'Data de envio da proposta',
       attrs: 'data-prop="dataEnvio"',
       classes: `prop px-2 py-1.5 text-[13px] ${dateClasses[dateState]}`,
-      content: formatDateBR(state.dataEnvio),
+      content: `<span class="card-edit-target">${formatDateBR(state.dataEnvio)}</span>`,
     },
     {
       key: 'cidade', tooltip: 'Cidade / Estado',
       attrs: 'data-prop="cidade"',
-      classes: 'prop px-2 py-1.5 text-[13px] text-zinc-900',
+      classes: 'prop-static px-2 py-1.5 text-[13px] text-zinc-900',
       content: `${state.cidade} • ${state.estado}`,
     },
     {
       key: 'valor', tooltip: 'Valor global',
       attrs: 'data-prop="valor"',
       classes: 'prop px-2 py-1.5 text-[13px] text-zinc-900',
-      content: formatCurrency(state.valorGlobal),
+      content: `<span class="card-edit-target">${formatCurrency(state.valorGlobal)}</span>`,
     },
     {
       key: 'itensMatch', tooltip: 'Itens com correspondência',
@@ -855,10 +877,13 @@ function bindPropHandlers() {
   const root = document.getElementById('cardRoot');
   if (!root) return;
 
-  // Static properties
+  // Static properties — só editores inline quando clica EXATAMENTE no componente (.card-edit-target)
+  // Padrão Notion: row é só layout, click no chip/pill = edita, click na area = abre detalhe
   root.querySelectorAll('[data-prop]').forEach(el => {
     el.addEventListener('click', (e) => {
       if (wasDragging) return;
+      if (el.classList.contains('prop-static')) return; // click-to-open, não edita inline
+      if (!e.target.closest('.card-edit-target')) return; // clicou na area "morta" da row → bubble pro card
       e.stopPropagation();
       const prop = el.dataset.prop;
       const editors = {
@@ -876,6 +901,21 @@ function bindPropHandlers() {
       };
       editors[prop]?.(el);
     });
+  });
+
+  // Card root: click em área "morta" (ou em .prop-static) abre o detalhe
+  const cardRoot = root.querySelector('.card-root');
+  if (cardRoot) {
+    cardRoot.addEventListener('click', (e) => {
+      if (wasDragging) return;
+      // TODO: implementar abertura real do detalhe
+      console.log('Open card detail');
+    });
+  }
+
+  // Floating actions: stopPropagation pra clicks nos botões (link, kebab) não abrirem o detalhe
+  root.querySelectorAll('.floating-actions').forEach(el => {
+    el.addEventListener('click', (e) => e.stopPropagation());
   });
 
   // Demo properties — abrir editor genérico baseado no tipo
@@ -911,6 +951,37 @@ function bindPropHandlers() {
       btn.classList.toggle('checked');
       const cardRoot = root.querySelector('.card-root');
       if (cardRoot) cardRoot.classList.toggle('selected', state.selected);
+    });
+  });
+
+  // Menu de ações do card (kebab) — abre dropdown com "Descartar"
+  root.querySelectorAll('[data-card-menu]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      // Toggle: se o menu já está aberto neste botão, fecha
+      if (btn.classList.contains('editing')) {
+        closeAllPopovers();
+        return;
+      }
+      showPopover(btn, `
+        <div class="pop-item" data-action="descartar">
+          <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+          <span>Descartar</span>
+        </div>
+      `, {
+        minWidth: 160,
+        onMount: (pop) => {
+          pop.addEventListener('click', (ev) => {
+            const item = ev.target.closest('.pop-item');
+            if (!item) return;
+            if (item.dataset.action === 'descartar') {
+              closeAllPopovers();
+              // TODO: implementar descarte real do card
+              console.log('Descartar card');
+            }
+          });
+        },
+      });
     });
   });
 
@@ -2133,23 +2204,6 @@ document.getElementById('addPropertyBtn').addEventListener('click', (e) => {
 
 // ===== INIT =====
 render();
-
-// ===== Hydration API (specifc to kanban detail panel) =====
-// `state`, `render`, `pessoas` são const top-level e não vivem em `window.*`.
-// Esta API expõe um hook mínimo pra views consumidoras (kanban) injetarem dados.
-window.__cardAPI = {
-  setPessoas(list) {
-    if (!Array.isArray(list)) return;
-    pessoas.length = 0;
-    list.forEach(p => pessoas.push(p));
-  },
-  setState(next) {
-    if (!next || typeof next !== 'object') return;
-    Object.assign(state, next);
-    render();
-  }
-};
-window.dispatchEvent(new Event('card-api-ready'));
 </script>
 
 </body>
