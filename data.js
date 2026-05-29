@@ -3,14 +3,18 @@
 // O kanban agrupa cards por `etapa` (não confundir com `status` do edital,
 // que é uma propriedade separada do card e renderiza como pill colorido).
 // =====================================================================
+// Paleta dos tokens "category-*" do design system, exceto Suspensa que recebe
+// override pra cinza neutro (#737373) — convenção de "pausado/inativo".
+// Decisão Brunno 2026-05-29: paleta unificada com a dos segmentos, com a
+// exceção pontual de Suspensa.
 const ETAPAS = [
-  { key: "analise",     label: "Análise de Oportunidades", dot: "#F59E0B" },
-  { key: "suspensa",    label: "Suspensa",                 dot: "#9CA3AF" },
-  { key: "preparacao",  label: "Preparação de Proposta",   dot: "#3B82F6" },
-  { key: "disputa",     label: "Disputa de Classificação", dot: "#8B5CF6" },
-  { key: "habilitacao", label: "Processo de Habilitação",  dot: "#F97316" },
-  { key: "recursos",    label: "Fase de Recursos",         dot: "#06B6D4" },
-  { key: "resultados",  label: "Resultados Finais",        dot: "#22C55E" }
+  { key: "analise",     label: "Análise de Oportunidades", dot: "#4579A6" }, // category-blue
+  { key: "suspensa",    label: "Suspensa",                 dot: "#737373" }, // gray (override)
+  { key: "preparacao",  label: "Preparação de Proposta",   dot: "#46467D" }, // category-indigo
+  { key: "disputa",     label: "Disputa de Classificação", dot: "#835B8E" }, // category-purple
+  { key: "habilitacao", label: "Processo de Habilitação",  dot: "#694500" }, // category-amber
+  { key: "recursos",    label: "Fase de Recursos",         dot: "#A26053" }, // category-red
+  { key: "resultados",  label: "Resultados Finais",        dot: "#2B6339" }  // category-green
 ];
 
 // =====================================================================

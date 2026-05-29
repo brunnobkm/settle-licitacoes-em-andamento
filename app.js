@@ -606,12 +606,15 @@
     { key: "orgao",        label: "Órgão",                      cls: "col-orgao" },
     { key: "objeto",       label: "Objeto",                     cls: "col-objeto" },
     { key: "status",       label: "Status do edital",           cls: "col-status" },
-    { key: "resultado",    label: "Resultado",                  cls: "col-resultado" },
     { key: "responsaveis", label: "Responsável",                cls: "col-responsaveis" },
     { key: "dataEnvio",    label: "Data de envio da proposta",  cls: "col-data" },
     { key: "local",        label: "Cidade e Estado",            cls: "col-local" },
     { key: "valor",        label: "Valor global",               cls: "col-valor" },
-    { key: "etapa",        label: "Etapa",                      cls: "col-etapa" }
+    { key: "etapa",        label: "Etapa",                      cls: "col-etapa" },
+    // Resultado por último — só aplicável a cards em "Resultados Finais", então
+    // a coluna fica majoritariamente vazia; colocar no fim evita "buraco" visual
+    // no meio da tabela. Pedido do Brunno 2026-05-29.
+    { key: "resultado",    label: "Resultado",                  cls: "col-resultado" }
   ];
 
   // Conteúdo de cada célula da tabela. Para colunas editáveis, o conteúdo
@@ -626,8 +629,8 @@
         return `<span class="card-edit-target cell-objeto" title="${esc(it.objeto)}">${esc(it.objeto)}</span>`;
       case "etapa": {
         const e = ETAPAS.find(x => x.key === it.etapa);
-        if (!e) return "—";
-        return `<span class="etapa-pill"><span class="lane-dot" style="background:${e.dot}"></span>${esc(e.label)}</span>`;
+        if (!e) return '<span class="card-edit-target empty-hint">Definir etapa</span>';
+        return `<span class="card-edit-target etapa-pill"><span class="lane-dot" style="background:${e.dot}"></span>${esc(e.label)}</span>`;
       }
       case "codigoEdital":
         return `<span class="mono">${esc(it.codigoEdital)}</span>`;
@@ -648,9 +651,8 @@
           : '<span class="card-edit-target empty-hint">Definir status</span>';
       }
       case "resultado": {
-        // Só aplicável quando o card está em "Resultados Finais". Em outras
-        // etapas a célula fica vazia e o td não recebe data-prop (não editável).
-        if (it.etapa !== "resultados") return "";
+        // Na tabela, "resultado" é editável em qualquer linha (não só nas em
+        // "Resultados Finais"). Linhas sem resultado mostram empty-hint clicável.
         const r = getResultado(it.resultado);
         return r
           ? `<span class="card-edit-target status-pill" style="background:${r.bg};color:${r.text}">${esc(r.label)}</span>`
@@ -683,14 +685,16 @@
   // Mapeia a chave da coluna da tabela pra chave do INLINE_EDITORS. Em geral é
   // 1:1; só "local" diverge (chave do editor é "cidade", porque o editor cobre
   // cidade+estado num único popover). null = coluna não-editável.
-  // Recebe o item porque "resultado" só é editável se o card estiver na etapa
-  // "resultados" — em outras linhas a célula vira read-only.
+  // "resultado" é editável em QUALQUER linha da tabela (decisão Brunno
+  // 2026-05-29) — o usuário pode pré-definir o resultado antes do card chegar
+  // em Resultados Finais. O card do Board ainda só mostra a badge quando
+  // etapa === "resultados", mas o dado fica salvo.
+  // "etapa" também é editável na tabela (single-select popover); no Board ela
+  // continua sendo alterada apenas via drag-and-drop entre lanes.
   function tableColPropKey(colKey, item) {
     switch (colKey) {
-      case "codigoEdital": return null; // não editável
-      case "etapa":        return null; // kanban-only
+      case "codigoEdital": return null; // não editável (identificador imutável)
       case "local":        return "cidade";
-      case "resultado":    return item && item.etapa === "resultados" ? "resultado" : null;
       default:             return colKey;
     }
   }
@@ -966,9 +970,19 @@
 
   // ---- editor: resultado (single-select; só dois valores ganhou/perdeu) ----
   // Estrutura idêntica ao editStatus pra manter UX consistente.
+  // GATE: só pode editar se a etapa for "resultados". Em outras etapas, abre
+  // modal informando a restrição (cenário acionado pela tabela, onde a coluna
+  // "Resultado" é sempre clicável — decisão Brunno 2026-05-29).
   function editResultado(anchor, row, itemId) {
     const item = state.find(i => i.id === itemId);
     if (!item) return;
+    if (item.etapa !== "resultados") {
+      showConstructionModal({
+        title: "Definir resultado",
+        body: '<p>Só é possível definir o resultado quando a licitação estiver na etapa <strong>Resultados Finais</strong>.</p>'
+      });
+      return;
+    }
 
     const renderList = (pop) => {
       pop.querySelector(".pop-scroll").innerHTML = `
@@ -995,6 +1009,41 @@
           const it = e.target.closest("[data-id]");
           if (!it) return;
           item.resultado = it.dataset.id || null;
+          refreshAfterEdit();
+        });
+      }
+    });
+  }
+
+  // ---- editor: etapa (single-select; usado só na tabela — no Board a etapa
+  //      é alterada via drag-and-drop entre lanes) ----
+  function editEtapa(anchor, row, itemId) {
+    const item = state.find(i => i.id === itemId);
+    if (!item) return;
+
+    const renderList = (pop) => {
+      pop.querySelector(".pop-scroll").innerHTML = `
+        ${ETAPAS.map(e => `
+          <div class="pop-item ${e.key === item.etapa ? "selected" : ""}" data-id="${esc(e.key)}">
+            <span class="etapa-pill"><span class="lane-dot" style="background:${e.dot}"></span>${esc(e.label)}</span>
+            <svg class="check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          </div>
+        `).join("")}
+      `;
+    };
+
+    showPopover(anchor, `<div class="pop-scroll" style="max-height:none"></div>`, {
+      minWidth: 240,
+      onMount: (pop) => {
+        renderList(pop);
+        pop.addEventListener("click", (e) => {
+          const it = e.target.closest("[data-id]");
+          if (!it) return;
+          const newEtapa = it.dataset.id;
+          if (!ETAPAS.find(e => e.key === newEtapa)) return;
+          item.etapa = newEtapa;
+          // Side-effect: se o card sair de "resultados", a badge resultado some
+          // do Board (mas o valor é preservado em item.resultado pra quando voltar).
           refreshAfterEdit();
         });
       }
@@ -1399,6 +1448,7 @@
   const INLINE_EDITORS = {
     status:       editStatus,
     resultado:    editResultado,
+    etapa:        editEtapa,
     segmentos:    editSegmentos,
     responsaveis: editResponsaveis,
     valor:        editValor,
@@ -1697,10 +1747,25 @@
     render();
   }
 
-  // ---------- modal "Em construção" ----------
-  function showConstructionModal() {
+  // ---------- modal genérico (reaproveitado pra "Em construção" e avisos) ----------
+  // opts: { title, body } — opcionais. Sem opts mantém o conteúdo default
+  // "Em construção / Esta tela ainda está em construção." pra preservar o
+  // comportamento do click no padding do card.
+  function showConstructionModal(opts) {
     const modal = document.getElementById("constructionModal");
     if (!modal) return;
+    if (opts) {
+      const titleEl = modal.querySelector(".construction-modal-title");
+      const bodyEl  = modal.querySelector(".construction-modal-body");
+      if (opts.title && titleEl) titleEl.textContent = opts.title;
+      if (opts.body  && bodyEl)  bodyEl.innerHTML    = opts.body;
+    } else {
+      // Restaura defaults caso uma chamada anterior tenha customizado
+      const titleEl = modal.querySelector(".construction-modal-title");
+      const bodyEl  = modal.querySelector(".construction-modal-body");
+      if (titleEl) titleEl.textContent = "Em construção";
+      if (bodyEl)  bodyEl.innerHTML    = "<p>Esta tela ainda está em construção.</p>";
+    }
     modal.hidden = false;
     // foco no botão "Entendi" pra acessibilidade
     const btn = modal.querySelector(".construction-modal-btn");
