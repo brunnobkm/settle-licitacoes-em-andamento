@@ -502,6 +502,16 @@
     line-height: 1.4;
     min-width: 0;
   }
+  /* Órgão: condensado em até 2 linhas (≈80 chars na largura 342px) */
+  .orgao-text {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    line-height: 1.4;
+    min-width: 0;
+    word-break: break-word;
+  }
   /* Checkbox alinhado com a 1ª linha do título */
   [data-prop="titulo"] .card-select-checkbox {
     margin-top: 1px;
@@ -573,7 +583,6 @@ const state = {
   cidade: 'Paripiranga',
   estado: 'BA',
   valorGlobal: 220965.46,
-  itensMatch: 12,
   demoProperties: [], // propriedades adicionadas via "Adicionar propriedade"
   propertyOrder: [],  // ordem custom das propriedades; vazio = ordem padrão
   selected: false,    // estado de seleção do card (checkbox no hover)
@@ -777,7 +786,7 @@ function getCardProperties() {
       key: 'orgao', tooltip: 'Nome do Órgão',
       attrs: 'data-prop="orgao"',
       classes: 'prop-static px-2 py-1.5 text-[13px] text-zinc-900 leading-snug font-semibold',
-      content: state.orgao || '<span class="empty-hint">Vazio</span>',
+      content: state.orgao ? `<span class="orgao-text">${state.orgao}</span>` : '<span class="empty-hint">Vazio</span>',
     },
     {
       key: 'objeto', tooltip: 'Objeto da licitação',
@@ -823,12 +832,6 @@ function getCardProperties() {
       attrs: 'data-prop="valor"',
       classes: 'prop px-2 py-1.5 text-[13px] text-zinc-900',
       content: `<span class="card-edit-target">${formatCurrency(state.valorGlobal)}</span>`,
-    },
-    {
-      key: 'itensMatch', tooltip: 'Itens com correspondência',
-      attrs: '',
-      classes: 'prop-static px-2 py-1.5 text-[13px] text-zinc-900 font-semibold',
-      content: `${state.itensMatch} ${state.itensMatch === 1 ? 'item' : 'itens'} com correspondência`,
     },
   ];
 
@@ -897,7 +900,6 @@ function bindPropHandlers() {
         dataEnvio: editDataEnvio,
         cidade: editCidade,
         valor: editValor,
-        itensMatch: editItensMatch,
       };
       editors[prop]?.(el);
     });
@@ -1644,34 +1646,6 @@ function editStatus(anchor) {
   });
 }
 
-// --- Itens com correspondência (número inline) ---
-function editItensMatch(anchor) {
-  closeAllPopovers();
-  anchor.classList.add('editing');
-  const original = state.itensMatch;
-  anchor.innerHTML = `
-    <div class="flex items-baseline gap-1.5">
-      <input type="number" min="0" class="inline-input text-[13px] text-zinc-900" style="max-width: 50px" value="${original}" />
-      <span class="text-[13px] text-zinc-500">itens com correspondência</span>
-    </div>
-  `;
-  const input = anchor.querySelector('input');
-  input.focus();
-  input.select();
-
-  const commit = (save) => {
-    if (save) {
-      const parsed = parseInt(input.value);
-      if (!isNaN(parsed) && parsed >= 0) state.itensMatch = parsed;
-    }
-    render();
-  };
-  input.addEventListener('blur', () => commit(true));
-  input.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
-    if (e.key === 'Escape') commit(false);
-  });
-}
 
 // =====================================================================
 // TYPE REGISTRY — 23 tipos do Notion. Cada um define como renderiza no

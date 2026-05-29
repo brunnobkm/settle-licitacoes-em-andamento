@@ -126,7 +126,7 @@
       // Card do kanban = modo execução: título removido (info redundante).
       // O título continua sendo definido no card-fonte (detail panel) onde
       // tem o role de identificação editável.
-      // codigoEdital, orgao, objeto, cidade, itensMatch = prop-static (só
+      // codigoEdital, orgao, objeto, cidade = prop-static (só
       // click-to-open detail, sem editor inline — match com prototype).
       {
         key: "codigoEdital",
@@ -150,7 +150,7 @@
         key: "orgao",
         tooltip: "Nome do Órgão",
         classes: "prop-static prop-orgao",
-        content: esc(item.orgao) || '<span class="empty-hint">Vazio</span>'
+        content: item.orgao ? `<span class="orgao-text">${esc(item.orgao)}</span>` : '<span class="empty-hint">Vazio</span>'
       },
       {
         key: "objeto",
@@ -198,12 +198,6 @@
         classes: "prop prop-valor",
         content: `<span class="card-edit-target">${brl(item.valorGlobal)}</span>`
       },
-      {
-        key: "itensMatch",
-        tooltip: "Itens com correspondência",
-        classes: "prop-static prop-itens",
-        content: `${item.itensMatch} ${item.itensMatch === 1 ? "item" : "itens"} com correspondência`
-      }
     ];
   }
 
@@ -469,8 +463,7 @@
     { key: "responsaveis", label: "Responsáveis",   cls: "col-responsaveis" },
     { key: "dataEnvio",    label: "Data de envio",  cls: "col-data" },
     { key: "local",        label: "Local",          cls: "col-local" },
-    { key: "valor",        label: "Valor global",   cls: "col-valor" },
-    { key: "itens",        label: "Itens",          cls: "col-itens" }
+    { key: "valor",        label: "Valor global",   cls: "col-valor" }
   ];
 
   function tdContent(key, it) {
@@ -510,8 +503,6 @@
         return `<span class="cell-local">${esc(it.cidade)} <span class="local-sep">•</span> ${esc(it.estado)}</span>`;
       case "valor":
         return `<span class="cell-valor">${brl(it.valorGlobal)}</span>`;
-      case "itens":
-        return `<span class="cell-itens">${it.itensMatch} ${it.itensMatch === 1 ? "item" : "itens"}</span>`;
       default:
         return "";
     }
@@ -1144,7 +1135,6 @@
         cidade:        item.cidade,
         estado:        item.estado,
         valorGlobal:   item.valorGlobal,
-        itensMatch:    item.itensMatch,
         demoProperties: [],
         propertyOrder: [],
         selected: false

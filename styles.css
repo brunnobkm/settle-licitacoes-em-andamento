@@ -340,8 +340,17 @@ button { font-family: inherit; cursor: pointer; }
   white-space: nowrap;
 }
 
-/* 4. Órgão */
+/* 4. Órgão (clamp 2 linhas ≈ 80 chars na largura 342px) */
 .prop-orgao { font-weight: 600; line-height: 1.4; }
+.orgao-text {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  line-height: 1.4;
+  min-width: 0;
+  word-break: break-word;
+}
 
 /* 5. Objeto */
 .prop-objeto { line-height: 1.375; }
@@ -387,9 +396,6 @@ button { font-family: inherit; cursor: pointer; }
 
 /* 10. Valor */
 .prop-valor { font-size: 13px; font-variant-numeric: tabular-nums; }
-
-/* 11. Itens com correspondência */
-.prop-itens { font-weight: 600; }
 
 .empty-hint { color: rgba(15,15,15,.4); }
 
@@ -466,7 +472,6 @@ button { font-family: inherit; cursor: pointer; }
 .lic-table .col-data         { width: 120px; }
 .lic-table .col-local        { width: 170px; }
 .lic-table .col-valor        { width: 140px; }
-.lic-table .col-itens        { width: 140px; }
 
 /* Cell-specific styles (reaproveitam tokens do card) */
 .lic-table .cell-match  { font-weight: 600; color: var(--text); }
@@ -478,7 +483,6 @@ button { font-family: inherit; cursor: pointer; }
 }
 .lic-table .cell-valor  { font-variant-numeric: tabular-nums; text-align: right; }
 .lic-table .col-valor   { text-align: right; }
-.lic-table .cell-itens  { font-weight: 600; }
 
 .lic-table .cell-segmentos .pills,
 .lic-table .cell-responsaveis .people-list {
