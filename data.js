@@ -4,11 +4,13 @@
 // que é uma propriedade separada do card e renderiza como pill colorido).
 // =====================================================================
 const ETAPAS = [
-  { key: "analise",     label: "Análise de oportunidades", dot: "#F59E0B" },
+  { key: "analise",     label: "Análise de Oportunidades", dot: "#F59E0B" },
+  { key: "suspensa",    label: "Suspensa",                 dot: "#9CA3AF" },
   { key: "preparacao",  label: "Preparação de Proposta",   dot: "#3B82F6" },
   { key: "disputa",     label: "Disputa de Classificação", dot: "#8B5CF6" },
   { key: "habilitacao", label: "Processo de Habilitação",  dot: "#F97316" },
-  { key: "homologacao", label: "Homologação",              dot: "#22C55E" }
+  { key: "recursos",    label: "Fase de Recursos",         dot: "#06B6D4" },
+  { key: "resultados",  label: "Resultados Finais",        dot: "#22C55E" }
 ];
 
 // =====================================================================
@@ -23,6 +25,15 @@ const STATUS_EDITAL = [
   { id: "revogada",   label: "Revogada",                  bg: "#fee2e2", text: "#dc2626" },
   { id: "homologada", label: "Homologada",                bg: "#dcfce7", text: "#15803d" },
   { id: "deserta",    label: "Deserta ou Fracassada",     bg: "#fee2e2", text: "#dc2626" }
+];
+
+// =====================================================================
+// Resultado da licitação (badge mostrada apenas em cards na etapa
+// "resultados"). Só dois valores possíveis — venceu vs perdeu.
+// =====================================================================
+const RESULTADOS_DISPONIVEIS = [
+  { id: "ganhou", label: "Ganhou e foi habilitado", bg: "#dcfce7", text: "#15803d" },
+  { id: "perdeu", label: "Perdeu a licitação",      bg: "#fee2e2", text: "#dc2626" }
 ];
 
 // =====================================================================
@@ -123,7 +134,7 @@ const LICITACOES = [
     etapa: "analise",
     status: "abertas",
     responsaveis: [5, 6, 7],
-    dataEnvio: "2026-06-04",
+    dataEnvio: null,
     cidade: "Belo Horizonte",
     estado: "MG",
     valorGlobal: 7850000,
@@ -207,7 +218,7 @@ const LICITACOES = [
     etapa: "disputa",
     status: "em-disputa",
     responsaveis: [4, 7, 8],
-    dataEnvio: "2026-05-23",
+    dataEnvio: null,
     cidade: "Fortaleza",
     estado: "CE",
     valorGlobal: 22400000,
@@ -241,7 +252,7 @@ const LICITACOES = [
     etapa: "habilitacao",
     status: "em-disputa",
     responsaveis: [10],
-    dataEnvio: "2026-05-12",
+    dataEnvio: null,
     cidade: "Salvador",
     estado: "BA",
     valorGlobal: 11650000,
@@ -272,7 +283,8 @@ const LICITACOES = [
     segmentos: ["TI"],
     orgao: "TCU / Secretaria de Tecnologia da Informação",
     objeto: "AQUISIÇÃO DE LICENÇAS DE SOFTWARE DE PRODUTIVIDADE E COLABORAÇÃO EM NUVEM, COM SUPORTE TÉCNICO E TREINAMENTO, PARA OS USUÁRIOS DO TRIBUNAL DE CONTAS DA UNIÃO.",
-    etapa: "homologacao",
+    etapa: "resultados",
+    resultado: "ganhou",
     status: "homologada",
     responsaveis: [1],
     dataEnvio: "2026-04-22",
@@ -288,7 +300,8 @@ const LICITACOES = [
     segmentos: ["Transporte"],
     orgao: "Governo do Estado de São Paulo / Secretaria da Administração Penitenciária",
     objeto: "AQUISIÇÃO DE VEÍCULOS UTILITÁRIOS BLINDADOS PARA TRANSPORTE DE CUSTÓDIA, COM ADAPTAÇÕES DE SEGURANÇA E SISTEMA DE COMUNICAÇÃO TETRA.",
-    etapa: "homologacao",
+    etapa: "resultados",
+    resultado: "perdeu",
     status: "anulada",
     responsaveis: [7, 9],
     dataEnvio: "2026-04-18",
@@ -304,7 +317,8 @@ const LICITACOES = [
     segmentos: ["Construção"],
     orgao: "IPHAN / Superintendência Estadual da Bahia",
     objeto: "EXECUÇÃO DE OBRAS DE RESTAURO DO PATRIMÔNIO HISTÓRICO EDIFICADO DO CENTRO HISTÓRICO DE SALVADOR, ATENDENDO ÀS DIRETRIZES TÉCNICAS DO IPHAN.",
-    etapa: "homologacao",
+    etapa: "resultados",
+    resultado: "perdeu",
     status: "deserta",
     responsaveis: [6, 10],
     dataEnvio: "2026-04-09",
@@ -339,6 +353,7 @@ const LICITACOES = [
 ];
 
 function getStatusEdital(id) { return STATUS_EDITAL.find(s => s.id === id); }
+function getResultado(id)   { return RESULTADOS_DISPONIVEIS.find(r => r.id === id); }
 function personById(id)      { return PESSOAS.find(p => p.id === id); }
 
 // =====================================================================

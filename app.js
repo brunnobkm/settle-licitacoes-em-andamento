@@ -10,6 +10,7 @@
   }
 
   function formatDateBR(iso) {
+    if (!iso) return ""; // null/undefined → vazio (chamador decide o fallback)
     const [y, m, d] = iso.split("-");
     return `${d}/${m}/${y}`;
   }
@@ -17,8 +18,10 @@
   // Estado de urgência da data.
   // Regra (definida pelo cliente): today=red, 1-7 days remaining=yellow, else=neutral.
   // Overdue (data já passou) cai em "normal" — não há tratamento especial.
+  // null/undefined → "none" (sem data programada).
   const TODAY = new Date("2026-05-21T00:00:00");
   function getDateState(iso) {
+    if (!iso) return "none";
     const target = new Date(iso + "T00:00:00");
     const diff = Math.round((target - TODAY) / 86400000);
     if (diff === 0)               return "today";
@@ -28,7 +31,8 @@
   const dateClasses = {
     today:  "date-today",
     urgent: "date-urgent",
-    normal: "date-normal"
+    normal: "date-normal",
+    none:   "date-none"
   };
 
   function esc(s) {
@@ -134,6 +138,23 @@
         classes: "prop-static prop-edital",
         content: `Edital <span class="mono">${esc(item.codigoEdital)}</span>`
       },
+      // Resultado da licitação — logo após o Edital, só nos cards em
+      // "Resultados Finais" (informação crítica nessa etapa, pedido do
+      // Brunno 2026-05-29).
+      {
+        key: "resultado",
+        tooltip: "Resultado",
+        classes: "prop",
+        _only: item.etapa === "resultados",
+        content: `<div class="status-wrap">${
+          (() => {
+            const r = getResultado(item.resultado);
+            return r
+              ? `<span class="status-pill card-edit-target" style="background:${r.bg};color:${r.text}">${esc(r.label)}</span>`
+              : '<span class="empty-hint card-edit-target">Definir resultado</span>';
+          })()
+        }</div>`
+      },
       {
         key: "segmentos",
         tooltip: "Segmento",
@@ -186,7 +207,9 @@
         key: "dataEnvio",
         tooltip: "Data de envio da proposta",
         classes: `prop prop-date ${dateClasses[dateState]}`,
-        content: `<span class="card-edit-target">${formatDateBR(item.dataEnvio)}</span>`
+        content: item.dataEnvio
+          ? `<span class="card-edit-target">${formatDateBR(item.dataEnvio)}</span>`
+          : '<span class="card-edit-target empty-hint">Sem data programada</span>'
       },
       {
         key: "cidade",
@@ -204,7 +227,11 @@
   }
 
   function renderCardHTML(item) {
-    const props = cardProperties(item).map(p => `
+    // _only === false marca propriedades condicionais (ex.: "resultado" aparece
+    // só quando etapa === "resultados"). undefined/true = sempre renderiza.
+    const props = cardProperties(item)
+      .filter(p => p._only !== false)
+      .map(p => `
       <div class="${p.classes} property-row" data-prop="${p.key}" data-tooltip="${esc(p.tooltip)}">
         ${p.content}
       </div>
@@ -284,6 +311,11 @@
   // ---------- calendar view ----------
   const WEEKDAYS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 
+  // Cards sem dataEnvio aparecem como chip "N licitações sem data" no toolbar
+  // (modo Banner — decidido pelo Brunno 2026-05-29 após comparar com Faixa,
+  // Lateral e Ocultar). Click abre popover com a lista; hover de cada chip
+  // mantém a mesma preview do calendar.
+
   function isoDate(d) {
     const y = d.getFullYear();
     const m = String(d.getMonth() + 1).padStart(2, "0");
@@ -307,12 +339,24 @@
     }
 
     const byDate = {};
+    const unscheduled = [];
     state.forEach(it => {
-      (byDate[it.dataEnvio] = byDate[it.dataEnvio] || []).push(it);
+      if (it.dataEnvio) (byDate[it.dataEnvio] = byDate[it.dataEnvio] || []).push(it);
+      else unscheduled.push(it);
     });
 
     const rawMonth = firstOfMonth.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
     const monthLabel = rawMonth.charAt(0).toUpperCase() + rawMonth.slice(1); // "Maio de 2026"
+
+    // Chip "N licitações sem data de envio da proposta" ao lado do "Hoje" no
+    // toolbar. Texto completo na badge (sem ambiguidade com outras datas) —
+    // pedido do Brunno 2026-05-29.
+    const bannerHTML = unscheduled.length ? `
+      <button class="cal-unsched-banner" id="calUnschedBanner" type="button">
+        <span class="cal-unsched-dot"></span>
+        ${unscheduled.length} ${unscheduled.length === 1 ? "licitação" : "licitações"} sem data de envio da proposta
+      </button>
+    ` : "";
 
     root.innerHTML = `
       <div class="cal-toolbar">
@@ -324,6 +368,7 @@
           <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4l4 4-4 4"/></svg>
         </button>
         <button class="cal-today-btn" id="calToday">Hoje</button>
+        ${bannerHTML}
       </div>
       <div class="cal-grid">
         <div class="cal-row-head">
@@ -367,6 +412,30 @@
       });
     });
     root.querySelectorAll("[data-tooltip]").forEach(bindTooltip);
+
+    // Banner "N sem data" — click abre popover listando os items sem dataEnvio
+    const bannerBtn = document.getElementById("calUnschedBanner");
+    if (bannerBtn) {
+      bannerBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const html = `
+          <div class="cal-unsched-pop-head">
+            <span class="cal-unsched-dot"></span>
+            <span>Sem data programada (${unscheduled.length})</span>
+          </div>
+          <div class="cal-unsched-pop-list">
+            ${unscheduled.map(it => renderEventChip(it)).join("")}
+          </div>
+        `;
+        showPopover(bannerBtn, html, { minWidth: 280, onMount: (pop) => {
+          pop.querySelectorAll(".cal-event").forEach(el => {
+            const id = el.dataset.id;
+            const it = state.find(i => i.id === id);
+            if (it) bindEventHover(el, it);
+          });
+        }});
+      });
+    }
   }
 
   const CAL_EVENTS_VISIBLE = 3; // chips de 1 linha (só o smart título); resto vai pra "+ N mais"
@@ -537,6 +606,7 @@
     { key: "orgao",        label: "Órgão",                      cls: "col-orgao" },
     { key: "objeto",       label: "Objeto",                     cls: "col-objeto" },
     { key: "status",       label: "Status do edital",           cls: "col-status" },
+    { key: "resultado",    label: "Resultado",                  cls: "col-resultado" },
     { key: "responsaveis", label: "Responsável",                cls: "col-responsaveis" },
     { key: "dataEnvio",    label: "Data de envio da proposta",  cls: "col-data" },
     { key: "local",        label: "Cidade e Estado",            cls: "col-local" },
@@ -577,6 +647,15 @@
           ? `<span class="card-edit-target status-pill" style="background:${s.bg};color:${s.text}">${esc(s.label)}</span>`
           : '<span class="card-edit-target empty-hint">Definir status</span>';
       }
+      case "resultado": {
+        // Só aplicável quando o card está em "Resultados Finais". Em outras
+        // etapas a célula fica vazia e o td não recebe data-prop (não editável).
+        if (it.etapa !== "resultados") return "";
+        const r = getResultado(it.resultado);
+        return r
+          ? `<span class="card-edit-target status-pill" style="background:${r.bg};color:${r.text}">${esc(r.label)}</span>`
+          : '<span class="card-edit-target empty-hint">Definir resultado</span>';
+      }
       case "responsaveis":
         return `<span class="card-edit-target"><span class="people-list">${
           it.responsaveis.length
@@ -588,7 +667,9 @@
         }</span></span>`;
       case "dataEnvio": {
         const cls = dateClasses[getDateState(it.dataEnvio)];
-        return `<span class="card-edit-target ${cls}">${formatDateBR(it.dataEnvio)}</span>`;
+        return it.dataEnvio
+          ? `<span class="card-edit-target ${cls}">${formatDateBR(it.dataEnvio)}</span>`
+          : '<span class="card-edit-target empty-hint">Sem data programada</span>';
       }
       case "local":
         return `<span class="card-edit-target cell-local">${esc(it.cidade)} <span class="local-sep">•</span> ${esc(it.estado)}</span>`;
@@ -602,11 +683,14 @@
   // Mapeia a chave da coluna da tabela pra chave do INLINE_EDITORS. Em geral é
   // 1:1; só "local" diverge (chave do editor é "cidade", porque o editor cobre
   // cidade+estado num único popover). null = coluna não-editável.
-  function tableColPropKey(colKey) {
+  // Recebe o item porque "resultado" só é editável se o card estiver na etapa
+  // "resultados" — em outras linhas a célula vira read-only.
+  function tableColPropKey(colKey, item) {
     switch (colKey) {
       case "codigoEdital": return null; // não editável
       case "etapa":        return null; // kanban-only
       case "local":        return "cidade";
+      case "resultado":    return item && item.etapa === "resultados" ? "resultado" : null;
       default:             return colKey;
     }
   }
@@ -627,7 +711,7 @@
     const rows = state.map(it => `
       <tr data-id="${esc(it.id)}">
         ${TABLE_COLS.map(c => {
-          const propKey = tableColPropKey(c.key);
+          const propKey = tableColPropKey(c.key, it);
           const propAttr = propKey ? ` data-prop="${propKey}"` : "";
           return `<td class="cell-${c.key} ${c.cls}"${propAttr}>${tdContent(c.key, it)}</td>`;
         }).join("")}
@@ -880,6 +964,43 @@
     });
   }
 
+  // ---- editor: resultado (single-select; só dois valores ganhou/perdeu) ----
+  // Estrutura idêntica ao editStatus pra manter UX consistente.
+  function editResultado(anchor, row, itemId) {
+    const item = state.find(i => i.id === itemId);
+    if (!item) return;
+
+    const renderList = (pop) => {
+      pop.querySelector(".pop-scroll").innerHTML = `
+        ${RESULTADOS_DISPONIVEIS.map(r => `
+          <div class="pop-item ${r.id === item.resultado ? "selected" : ""}" data-id="${esc(r.id)}">
+            <span class="status-pill" style="background:${r.bg};color:${r.text}">${esc(r.label)}</span>
+            <svg class="check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          </div>
+        `).join("")}
+        ${item.resultado ? `
+          <div class="pop-divider"></div>
+          <div class="pop-item" data-id="">
+            <svg class="pop-item-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+            <span class="pop-item-label">Limpar resultado</span>
+          </div>
+        ` : ""}
+      `;
+    };
+
+    showPopover(anchor, `<div class="pop-scroll" style="max-height:none"></div>`, {
+      onMount: (pop) => {
+        renderList(pop);
+        pop.addEventListener("click", (e) => {
+          const it = e.target.closest("[data-id]");
+          if (!it) return;
+          item.resultado = it.dataset.id || null;
+          refreshAfterEdit();
+        });
+      }
+    });
+  }
+
   // ---- editor: segmentos (multi-select com search + create) ----
   function editSegmentos(anchor, row, itemId) {
     const item = state.find(i => i.id === itemId);
@@ -1052,9 +1173,15 @@
   function editDataEnvio(anchor, row, itemId) {
     const item = state.find(i => i.id === itemId);
     if (!item) return;
-    const [y, m] = item.dataEnvio.split("-").map(Number);
-    _editCalMonth = m - 1;
-    _editCalYear  = y;
+    // Sem data → abre no mês de hoje (TODAY do protótipo)
+    if (item.dataEnvio) {
+      const [y, m] = item.dataEnvio.split("-").map(Number);
+      _editCalMonth = m - 1;
+      _editCalYear  = y;
+    } else {
+      _editCalMonth = TODAY.getMonth();
+      _editCalYear  = TODAY.getFullYear();
+    }
 
     const MESES = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
     const DIAS_SEMANA = ["D","S","T","Q","Q","S","S"];
@@ -1271,6 +1398,7 @@
   // Dispatch por chave de propriedade
   const INLINE_EDITORS = {
     status:       editStatus,
+    resultado:    editResultado,
     segmentos:    editSegmentos,
     responsaveis: editResponsaveis,
     valor:        editValor,

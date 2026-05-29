@@ -620,6 +620,7 @@ button { font-family: inherit; cursor: pointer; }
 .lic-table .col-orgao        { width: 260px; }
 .lic-table .col-objeto       { width: 320px; }
 .lic-table .col-status       { width: 200px; }
+.lic-table .col-resultado    { width: 200px; }
 .lic-table .col-responsaveis { width: 260px; }
 .lic-table .col-data         { width: 120px; }
 .lic-table .col-local        { width: 170px; }
@@ -672,6 +673,55 @@ button { font-family: inherit; cursor: pointer; }
   gap: 6px;
   margin-bottom: 12px;
   flex-shrink: 0;
+}
+
+/* ---- Sem data: chip no toolbar + popover (decisão do Brunno 2026-05-29) ---- */
+
+.cal-unsched-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: #6B7280;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+/* Chip "N sem data" no toolbar (ao lado do Hoje) */
+.cal-unsched-banner {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--border-soft);
+  background: white;
+  border-radius: 6px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text);
+  cursor: pointer;
+}
+.cal-unsched-banner:hover { background: var(--hover-bg); }
+
+/* Popover aberto pelo chip — lista vertical dos cards sem data */
+.cal-unsched-pop-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  border-bottom: 1px solid var(--border-soft);
+}
+.cal-unsched-pop-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px;
+  max-height: 320px;
+  overflow-y: auto;
 }
 .cal-title {
   font-size: 16px;
