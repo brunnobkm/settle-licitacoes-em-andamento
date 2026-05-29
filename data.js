@@ -342,6 +342,42 @@ function getStatusEdital(id) { return STATUS_EDITAL.find(s => s.id === id); }
 function personById(id)      { return PESSOAS.find(p => p.id === id); }
 
 // =====================================================================
+// Cidades por UF — usado no editor de Cidade e Estado (popover com dois
+// selects dependentes). Lista enxuta pra prototipagem: capitais + cidades
+// que aparecem no mock + alguns municípios médios por estado.
+// =====================================================================
+const CITIES_BY_UF = {
+  AC: ["Rio Branco", "Cruzeiro do Sul"],
+  AL: ["Maceió", "Arapiraca"],
+  AP: ["Macapá", "Santana"],
+  AM: ["Manaus", "Parintins"],
+  BA: ["Salvador", "Feira de Santana", "Vitória da Conquista", "Camaçari"],
+  CE: ["Fortaleza", "Caucaia", "Juazeiro do Norte"],
+  DF: ["Brasília", "Taguatinga", "Ceilândia"],
+  ES: ["Vitória", "Vila Velha", "Serra", "Cariacica"],
+  GO: ["Goiânia", "Aparecida de Goiânia", "Anápolis"],
+  MA: ["São Luís", "Imperatriz"],
+  MT: ["Cuiabá", "Várzea Grande", "Rondonópolis"],
+  MS: ["Campo Grande", "Dourados"],
+  MG: ["Belo Horizonte", "Uberlândia", "Contagem", "Juiz de Fora", "Betim"],
+  PA: ["Belém", "Ananindeua", "Santarém"],
+  PB: ["João Pessoa", "Campina Grande"],
+  PR: ["Curitiba", "Londrina", "Maringá", "Ponta Grossa"],
+  PE: ["Recife", "Jaboatão dos Guararapes", "Olinda", "Caruaru"],
+  PI: ["Teresina", "Parnaíba"],
+  RJ: ["Rio de Janeiro", "Niterói", "Macaé", "Petrópolis", "Nova Iguaçu"],
+  RN: ["Natal", "Mossoró"],
+  RS: ["Porto Alegre", "Caxias do Sul", "Silveira Martins", "Santa Maria", "Pelotas"],
+  RO: ["Porto Velho", "Ji-Paraná"],
+  RR: ["Boa Vista"],
+  SC: ["Florianópolis", "Joinville", "Blumenau", "São José"],
+  SP: ["São Paulo", "Campinas", "Guarulhos", "São Bernardo do Campo", "Santos"],
+  SE: ["Aracaju", "Nossa Senhora do Socorro"],
+  TO: ["Palmas", "Araguaína"]
+};
+const UF_LIST = Object.keys(CITIES_BY_UF).sort();
+
+// =====================================================================
 // Itens com correspondência (principais matches do usuário).
 // Usado em calendar chip + tabela como "assunto" filtrado pelo que o
 // usuário do Settle vende — em vez de objeto comprimido genérico.

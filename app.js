@@ -130,7 +130,7 @@
       // click-to-open detail, sem editor inline — match com prototype).
       {
         key: "codigoEdital",
-        tooltip: "Número do edital",
+        tooltip: "Edital",
         classes: "prop-static prop-edital",
         content: `Edital <span class="mono">${esc(item.codigoEdital)}</span>`
       },
@@ -148,17 +148,19 @@
       },
       {
         key: "orgao",
-        tooltip: "Nome do Órgão",
-        classes: "prop-static prop-orgao",
-        content: item.orgao ? `<span class="orgao-text">${esc(item.orgao)}</span>` : '<span class="empty-hint">Vazio</span>'
+        tooltip: "Órgão",
+        classes: "prop prop-orgao",
+        content: item.orgao
+          ? `<span class="orgao-text card-edit-target">${esc(item.orgao)}</span>`
+          : '<span class="empty-hint card-edit-target">Adicionar órgão</span>'
       },
       {
         key: "objeto",
-        tooltip: "Objeto da licitação",
-        classes: "prop-static prop-objeto",
+        tooltip: "Objeto",
+        classes: "prop prop-objeto",
         content: item.objeto
-          ? `<span class="objeto-clamp">${esc(item.objeto)}</span>`
-          : '<span class="empty-hint">Vazio</span>'
+          ? `<span class="objeto-clamp card-edit-target">${esc(item.objeto)}</span>`
+          : '<span class="empty-hint card-edit-target">Adicionar objeto</span>'
       },
       {
         key: "status",
@@ -188,9 +190,9 @@
       },
       {
         key: "cidade",
-        tooltip: "Cidade / Estado",
-        classes: "prop-static prop-local",
-        content: `${esc(item.cidade)} <span class="local-sep">•</span> ${esc(item.estado)}`
+        tooltip: "Cidade e Estado",
+        classes: "prop prop-local",
+        content: `<span class="card-edit-target">${esc(item.cidade)} <span class="local-sep">•</span> ${esc(item.estado)}</span>`
       },
       {
         key: "valor",
@@ -217,11 +219,13 @@
               <path d="M14 11a5 5 0 0 0-7.07 0l-3 3a5 5 0 0 0 7.07 7.07L12.5 19.5"/>
             </svg>
           </button>
-          <button class="action-btn" data-card-menu title="Mais opções" aria-label="Mais opções">
+          <button class="action-btn" data-card-discard title="Descartar" aria-label="Descartar">
             <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="12" cy="12" r="1"/>
-              <circle cx="19" cy="12" r="1"/>
-              <circle cx="5" cy="12" r="1"/>
+              <path d="M3 6h18"/>
+              <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+              <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+              <path d="M10 11v6"/>
+              <path d="M14 11v6"/>
             </svg>
           </button>
         </div>
@@ -257,6 +261,10 @@
   let wasDragging = false;
 
   function render() {
+    // Fecha popover do calendar se aberto — render() é chamado após commit de
+    // edição inline; sem isso o popover ficaria com dados stale.
+    if (typeof hideEventHover === "function") hideEventHover();
+
     const board = document.getElementById("board");
     board.innerHTML = ETAPAS.map(et =>
       laneHTML(et, state.filter(i => i.etapa === et.key))
@@ -266,6 +274,11 @@
 
     bindCardEvents();
     bindLaneEvents();
+
+    // Editores chamam render() no commit. Quando a view ativa é table/calendar,
+    // a UI visível precisa refletir as mudanças — rebuilda também essas views.
+    if (currentView === "table")    renderTable();
+    if (currentView === "calendar") renderCalendar();
   }
 
   // ---------- calendar view ----------
@@ -341,7 +354,9 @@
     });
 
     root.querySelectorAll(".cal-event").forEach(el => {
-      el.addEventListener("click", () => openDetail(el.dataset.id));
+      const id = el.dataset.id;
+      const item = state.find(i => i.id === id);
+      if (item) bindEventHover(el, item);  // popover estilo Google Agenda
     });
     root.querySelectorAll(".cal-more").forEach(btn => {
       btn.addEventListener("click", (e) => {
@@ -356,18 +371,85 @@
 
   const CAL_EVENTS_VISIBLE = 3; // chips de 1 linha (só o smart título); resto vai pra "+ N mais"
 
+  // ---------- hover popover do chip (estilo Google Agenda: preview rico) ----------
+  let _evtHoverEl = null;
+  let _evtShowTimer = null;
+  let _evtHideTimer = null;
+
+  function hideEventHover() {
+    clearTimeout(_evtShowTimer);
+    if (_evtHoverEl) { _evtHoverEl.remove(); _evtHoverEl = null; }
+  }
+
+  function showEventHover(anchor, item) {
+    hideEventHover();
+    const pop = document.createElement("div");
+    pop.className = "event-hover-card";
+    pop.innerHTML = renderCardHTML(item);
+    // No popover, desabilita drag e esconde floating-actions
+    pop.querySelectorAll("[draggable]").forEach(el => el.removeAttribute("draggable"));
+    document.body.appendChild(pop);
+
+    // Posiciona: tenta à direita do chip, depois à esquerda, sempre dentro da viewport
+    const r = anchor.getBoundingClientRect();
+    const pr = pop.getBoundingClientRect();
+    let left = r.right + 8;
+    if (left + pr.width > window.innerWidth - 8) left = r.left - pr.width - 8;
+    if (left < 8) left = 8;
+    let top = r.top;
+    if (top + pr.height > window.innerHeight - 8) top = window.innerHeight - pr.height - 8;
+    if (top < 8) top = 8;
+    pop.style.left = left + "px";
+    pop.style.top  = top + "px";
+
+    // Permite hover no popover sem fechar
+    pop.addEventListener("mouseenter", () => clearTimeout(_evtHideTimer));
+    pop.addEventListener("mouseleave", () => {
+      _evtHideTimer = setTimeout(hideEventHover, 200);
+    });
+
+    // Liga TODOS os listeners do card do board (hover, edição inline, click→modal,
+    // tooltips, action-btns). Popover === board card.
+    const card = pop.querySelector(".card-root");
+    if (card) bindCardListeners(card);
+
+    _evtHoverEl = pop;
+  }
+
+  function bindEventHover(chipEl, item) {
+    chipEl.addEventListener("mouseenter", () => {
+      clearTimeout(_evtHideTimer);
+      clearTimeout(_evtShowTimer);
+      _evtShowTimer = setTimeout(() => showEventHover(chipEl, item), 350);
+    });
+    chipEl.addEventListener("mouseleave", () => {
+      clearTimeout(_evtShowTimer);
+      _evtHideTimer = setTimeout(hideEventHover, 200);
+    });
+  }
+
+  // Cap do nome do órgão no chip do calendar: trunca em fronteira de palavra
+  // com reticência quando passa de `max` caracteres. CSS text-overflow ainda
+  // age como safety net se mesmo o resultado não couber visualmente.
+  const ORGAO_CHAR_CAP = 50;
+  function truncateOrgao(orgao, max = ORGAO_CHAR_CAP) {
+    if (!orgao || orgao.length <= max) return orgao || "";
+    return orgao.slice(0, max).replace(/\s+\S*$/, "").trimEnd() + "…";
+  }
+
   function renderEventChip(it) {
     const dateState = getDateState(it.dataEnvio);
     const dotColor = dateState === "today"  ? "#B91C1C"
                    : dateState === "urgent" ? "#D97706"
                                             : null;
-    // Calendar = modo planejamento: só o smart título (derivado do objeto).
-    // O código do edital fica acessível ao clicar no chip (abre detail panel).
-    const subject = smartObjetoTitle(it.objeto, 60);
+    // Título do chip = "Edital XXX/YYYY · Órgão (truncado)" — convenção da equipe
+    // (as pessoas se localizam pelo edital + entidade compradora).
+    // Hover mostra preview rico com o card completo (handler em bindEventHover).
+    const label = `Edital ${it.codigoEdital} · ${truncateOrgao(it.orgao)}`;
     return `
-      <div class="cal-event" data-id="${esc(it.id)}" data-tooltip="${esc(subject)}">
+      <div class="cal-event" data-id="${esc(it.id)}">
         ${dotColor ? `<span class="cal-event-dot" style="background:${dotColor}"></span>` : ""}
-        <span class="cal-event-title">${esc(subject)}</span>
+        <span class="cal-event-title">${esc(label)}</span>
       </div>
     `;
   }
@@ -439,13 +521,6 @@
     pop.style.left = left + "px";
     pop.style.top  = top + "px";
 
-    pop.querySelectorAll(".cal-event").forEach(el => {
-      el.addEventListener("click", () => {
-        const id = el.dataset.id;
-        closeDayPopover();
-        openDetail(id);
-      });
-    });
     pop.querySelector(".day-pop-close").addEventListener("click", closeDayPopover);
 
     setTimeout(() => document.addEventListener("click", onDayPopOutside, true), 10);
@@ -453,23 +528,32 @@
   }
 
   // ---------- table view ----------
+  // Ordem espelha as propriedades do card (Edital, Segmentos, Órgão, Objeto,
+  // Status, Responsáveis, Data, Local, Valor, Itens). Etapa é conceito
+  // kanban-only (não é prop do card), fica no fim como contexto.
   const TABLE_COLS = [
-    { key: "objeto",       label: "Objeto",         cls: "col-objeto" },
-    { key: "etapa",        label: "Etapa",          cls: "col-etapa" },
-    { key: "codigoEdital", label: "Edital",         cls: "col-codigo" },
-    { key: "segmentos",    label: "Segmentos",      cls: "col-segmentos" },
-    { key: "orgao",        label: "Órgão",          cls: "col-orgao" },
-    { key: "status",       label: "Status",         cls: "col-status" },
-    { key: "responsaveis", label: "Responsáveis",   cls: "col-responsaveis" },
-    { key: "dataEnvio",    label: "Data de envio",  cls: "col-data" },
-    { key: "local",        label: "Local",          cls: "col-local" },
-    { key: "valor",        label: "Valor global",   cls: "col-valor" }
+    { key: "codigoEdital", label: "Edital",                     cls: "col-codigo" },
+    { key: "segmentos",    label: "Segmento",                   cls: "col-segmentos" },
+    { key: "orgao",        label: "Órgão",                      cls: "col-orgao" },
+    { key: "objeto",       label: "Objeto",                     cls: "col-objeto" },
+    { key: "status",       label: "Status do edital",           cls: "col-status" },
+    { key: "responsaveis", label: "Responsável",                cls: "col-responsaveis" },
+    { key: "dataEnvio",    label: "Data de envio da proposta",  cls: "col-data" },
+    { key: "local",        label: "Cidade e Estado",            cls: "col-local" },
+    { key: "valor",        label: "Valor global",               cls: "col-valor" },
+    { key: "etapa",        label: "Etapa",                      cls: "col-etapa" }
   ];
 
+  // Conteúdo de cada célula da tabela. Para colunas editáveis, o conteúdo
+  // vai dentro de um <span class="card-edit-target"> — mesma convenção do card —
+  // pra que o click delegation despache pro INLINE_EDITORS[prop] (ver renderTable).
+  // codigoEdital e etapa NÃO são editáveis (etapa é conceito kanban-only).
   function tdContent(key, it) {
     switch (key) {
       case "objeto":
-        return `<span class="cell-objeto" title="${esc(it.objeto)}">${esc(smartObjetoTitle(it.objeto, 90))}</span>`;
+        // Tabela mostra o objeto inteiro (a célula quebra linha em vez de truncar,
+        // ver styles.css). O title fica como fallback de acessibilidade.
+        return `<span class="card-edit-target cell-objeto" title="${esc(it.objeto)}">${esc(it.objeto)}</span>`;
       case "etapa": {
         const e = ETAPAS.find(x => x.key === it.etapa);
         if (!e) return "—";
@@ -478,43 +562,75 @@
       case "codigoEdital":
         return `<span class="mono">${esc(it.codigoEdital)}</span>`;
       case "segmentos":
-        return `<div class="pills">${
-          it.segmentos.map(s => `<span class="tag-pill" style="background:${corDoSegmento(s)}">${esc(s)}</span>`).join("")
-        }</div>`;
+        return `<span class="card-edit-target"><span class="pills">${
+          it.segmentos.length
+            ? it.segmentos.map(s => `<span class="tag-pill" style="background:${corDoSegmento(s)}">${esc(s)}</span>`).join("")
+            : '<span class="empty-hint">Adicionar segmento</span>'
+        }</span></span>`;
       case "orgao":
-        return `<span class="cell-orgao" title="${esc(it.orgao)}">${esc(it.orgao)}</span>`;
+        return it.orgao
+          ? `<span class="card-edit-target cell-orgao" title="${esc(it.orgao)}">${esc(it.orgao)}</span>`
+          : '<span class="card-edit-target empty-hint">Adicionar órgão</span>';
       case "status": {
         const s = getStatusEdital(it.status);
-        if (!s) return "—";
-        return `<span class="status-pill" style="background:${s.bg};color:${s.text}">${esc(s.label)}</span>`;
+        return s
+          ? `<span class="card-edit-target status-pill" style="background:${s.bg};color:${s.text}">${esc(s.label)}</span>`
+          : '<span class="card-edit-target empty-hint">Definir status</span>';
       }
       case "responsaveis":
-        return `<div class="people-list">${
-          it.responsaveis.map(id => {
-            const p = personById(id);
-            return p ? `<span class="person-chip">${esc(p.nome)}</span>` : "";
-          }).join("")
-        }</div>`;
+        return `<span class="card-edit-target"><span class="people-list">${
+          it.responsaveis.length
+            ? it.responsaveis.map(id => {
+                const p = personById(id);
+                return p ? `<span class="person-chip">${esc(p.nome)}</span>` : "";
+              }).join("")
+            : '<span class="empty-hint">Sem responsáveis</span>'
+        }</span></span>`;
       case "dataEnvio": {
         const cls = dateClasses[getDateState(it.dataEnvio)];
-        return `<span class="${cls}">${formatDateBR(it.dataEnvio)}</span>`;
+        return `<span class="card-edit-target ${cls}">${formatDateBR(it.dataEnvio)}</span>`;
       }
       case "local":
-        return `<span class="cell-local">${esc(it.cidade)} <span class="local-sep">•</span> ${esc(it.estado)}</span>`;
+        return `<span class="card-edit-target cell-local">${esc(it.cidade)} <span class="local-sep">•</span> ${esc(it.estado)}</span>`;
       case "valor":
-        return `<span class="cell-valor">${brl(it.valorGlobal)}</span>`;
+        return `<span class="card-edit-target cell-valor">${brl(it.valorGlobal)}</span>`;
       default:
         return "";
     }
   }
 
+  // Mapeia a chave da coluna da tabela pra chave do INLINE_EDITORS. Em geral é
+  // 1:1; só "local" diverge (chave do editor é "cidade", porque o editor cobre
+  // cidade+estado num único popover). null = coluna não-editável.
+  function tableColPropKey(colKey) {
+    switch (colKey) {
+      case "codigoEdital": return null; // não editável
+      case "etapa":        return null; // kanban-only
+      case "local":        return "cidade";
+      default:             return colKey;
+    }
+  }
+
   function renderTable() {
     const root = document.getElementById("tableView");
+
+    // Preserva scroll horizontal/vertical da .table-wrap entre renders. Editores
+    // chamam render() no commit (e multi-select chama por toggle via
+    // rerenderCardAndReopen); sem isso a tabela "pula" pro início toda vez —
+    // bug reportado pelo Brunno 2026-05-29 ("clico numa célula e a página rola").
+    const prevWrap = root.querySelector(".table-wrap");
+    const prevScrollLeft = prevWrap ? prevWrap.scrollLeft : 0;
+    const prevScrollTop  = prevWrap ? prevWrap.scrollTop  : 0;
+
     const colgroup = TABLE_COLS.map(c => `<col class="${c.cls}">`).join("");
     const thead = TABLE_COLS.map(c => `<th class="${c.cls}">${esc(c.label)}</th>`).join("");
     const rows = state.map(it => `
       <tr data-id="${esc(it.id)}">
-        ${TABLE_COLS.map(c => `<td class="cell-${c.key} ${c.cls}">${tdContent(c.key, it)}</td>`).join("")}
+        ${TABLE_COLS.map(c => {
+          const propKey = tableColPropKey(c.key);
+          const propAttr = propKey ? ` data-prop="${propKey}"` : "";
+          return `<td class="cell-${c.key} ${c.cls}"${propAttr}>${tdContent(c.key, it)}</td>`;
+        }).join("")}
       </tr>
     `).join("");
 
@@ -528,9 +644,38 @@
       </div>
     `;
 
-    root.querySelectorAll("tbody tr").forEach(tr => {
-      tr.addEventListener("click", () => openDetail(tr.dataset.id));
+    // Restaura scroll na NOVA .table-wrap. Síncrono — antes do navegador pintar
+    // o frame, evita flicker.
+    const newWrap = root.querySelector(".table-wrap");
+    if (newWrap) {
+      newWrap.scrollLeft = prevScrollLeft;
+      newWrap.scrollTop  = prevScrollTop;
+    }
+
+    // Click delegation pra edição inline.
+    // Diferença vs. card do board: na tabela o handler vai no <td data-prop>
+    // inteiro (não só no .card-edit-target), pra que clicar em QUALQUER lugar da
+    // célula abra o editor — pedido do Brunno 2026-05-29. O .card-edit-target
+    // continua sendo o ANCHOR (anchor pra popover + alvo de innerHTML pros
+    // editores de input inline como valor/orgao/objeto).
+    root.querySelectorAll("tr[data-id]").forEach(tr => {
+      const id = tr.dataset.id;
+      tr.querySelectorAll("td[data-prop]").forEach(cell => {
+        cell.addEventListener("click", (e) => {
+          // Ignora clicks dentro de popovers/inputs já abertos (re-entrância)
+          if (e.target.closest(".popover, .inline-input")) return;
+          e.stopPropagation();
+          const prop = cell.dataset.prop;
+          const editor = INLINE_EDITORS[prop];
+          if (!editor) return;
+          const anchor = cell.querySelector(".card-edit-target") || cell;
+          editor(anchor, cell, id);
+        });
+      });
     });
+
+    // (Click→detail removido por decisão de produto; detail panel fica acessível
+    // somente via outras affordances futuras como menu 3-pontinhos.)
   }
 
   // ---------- view switching ----------
@@ -538,6 +683,7 @@
     currentView = view;
     hideTooltip();
     closeDayPopover();
+    hideEventHover();
     closeAllPopovers();
     document.getElementById("board").hidden     = view !== "board";
     document.getElementById("calendar").hidden  = view !== "calendar";
@@ -559,12 +705,42 @@
   let _ttTimer = null;
 
   function showTooltip(anchor) {
-    const text = anchor.getAttribute("data-tooltip");
-    if (!text) return;
+    const label = anchor.getAttribute("data-tooltip");
+    if (!label) return;
     hideTooltip();
     const tip = document.createElement("div");
     tip.className = "kb-tooltip";
-    tip.textContent = text;
+
+    // Detecta truncamento (horizontal por nowrap+ellipsis, ou vertical por line-clamp).
+    // Checa o próprio anchor (caso .prop-orgao com ellipsis no row) E descendentes
+    // que tipicamente clipam internamente (.objeto-clamp via -webkit-line-clamp,
+    // .orgao-text, .cell-* da tabela, etc.) — porque quando o overflow:hidden está
+    // no filho, o pai (row) não reflete scrollHeight/scrollWidth excedendo.
+    const isClipped = el =>
+      el.scrollWidth  > el.clientWidth  + 1 ||
+      el.scrollHeight > el.clientHeight + 1;
+    let truncatedEl = isClipped(anchor) ? anchor : null;
+    if (!truncatedEl) {
+      for (const el of anchor.querySelectorAll(".objeto-clamp, .orgao-text, .cell-objeto, .cell-orgao, .cell-local")) {
+        if (isClipped(el)) { truncatedEl = el; break; }
+      }
+    }
+    const value = truncatedEl ? (truncatedEl.textContent || "").replace(/\s+/g, " ").trim() : "";
+
+    if (value && value !== label) {
+      tip.classList.add("kb-tooltip-with-value");
+      const labelEl = document.createElement("div");
+      labelEl.className = "kb-tooltip-label";
+      labelEl.textContent = label;
+      const valueEl = document.createElement("div");
+      valueEl.className = "kb-tooltip-value";
+      valueEl.textContent = value;
+      tip.appendChild(labelEl);
+      tip.appendChild(valueEl);
+    } else {
+      tip.textContent = label;
+    }
+
     document.body.appendChild(tip);
     // Mede e posiciona — acima por padrão, flip pra baixo se não couber
     const r = anchor.getBoundingClientRect();
@@ -758,7 +934,7 @@
           // muta o item e re-renderiza o pop sem fechar (sem render global)
           renderList(pop);
         };
-        search.focus();
+        search.focus({ preventScroll: true }); // ver editValor pra contexto
         search.addEventListener("input", (e) => {
           query = e.target.value;
           renderList(pop);
@@ -813,7 +989,7 @@
     `, {
       onMount: (pop) => {
         const search = pop.querySelector(".pop-search");
-        search.focus();
+        search.focus({ preventScroll: true }); // ver editValor pra contexto
         search.addEventListener("input", (e) => {
           query = e.target.value;
           renderList(pop);
@@ -847,7 +1023,11 @@
       </span>
     `;
     const input = anchor.querySelector("input");
-    input.focus();
+    // preventScroll: evita que o navegador role o .table-wrap pra "trazer pra
+    // viewport" um input que já está visível (a célula foi clicada). Sem isso,
+    // editar uma célula longe da origem do scroll horizontal joga a tabela
+    // pra esquerda.
+    input.focus({ preventScroll: true });
     input.select();
 
     const commit = (save) => {
@@ -949,14 +1129,20 @@
     });
   }
 
-  // Re-render + reabrir o popover ancorado no mesmo data-prop daquele card
-  // (usado por editores multi-select que precisam refletir a mudança no card
-  // SEM fechar a UI de edição). Mantém o foco e o conteúdo da busca.
+  // Re-render + reabrir o popover ancorado no mesmo data-prop daquele card/row
+  // (usado por editores multi-select que precisam refletir a mudança SEM fechar
+  // a UI de edição). Mantém o foco e o conteúdo da busca.
+  // View-aware: em board/calendar reancora no .card-root; em table no <tr>.
   function rerenderCardAndReopen(itemId, propKey, editorFn, searchVal) {
     render();
-    const card = document.querySelector(`.card-root[data-id="${CSS.escape(itemId)}"]`);
-    if (!card) return;
-    const newRow = card.querySelector(`[data-prop="${propKey}"]`);
+    let host = null;
+    if (currentView === "table") {
+      host = document.querySelector(`tr[data-id="${CSS.escape(itemId)}"]`);
+    } else {
+      host = document.querySelector(`.card-root[data-id="${CSS.escape(itemId)}"]`);
+    }
+    if (!host) return;
+    const newRow = host.querySelector(`[data-prop="${propKey}"]`);
     if (!newRow) return;
     const newAnchor = newRow.querySelector(".card-edit-target") || newRow;
     editorFn(newAnchor, newRow, itemId);
@@ -965,10 +1151,121 @@
       const newSearch = document.querySelector(".popover .pop-search");
       if (newSearch) {
         newSearch.value = searchVal;
-        newSearch.focus();
+        newSearch.focus({ preventScroll: true }); // ver editValor pra contexto
         newSearch.dispatchEvent(new Event("input"));
       }
     }
+  }
+
+  // ---- editor: orgao (input simples de uma linha) ----
+  function editOrgao(anchor, row, itemId) {
+    const item = state.find(i => i.id === itemId);
+    if (!item) return;
+    closeAllPopovers();
+    row.classList.add("editing");
+    const original = item.orgao || "";
+    anchor.innerHTML = `<input class="inline-input" type="text" value="${esc(original)}" />`;
+    const input = anchor.querySelector("input");
+    input.focus({ preventScroll: true }); // ver editValor pra contexto
+    input.select();
+    const commit = (save) => {
+      if (save) item.orgao = input.value.trim();
+      render();
+    };
+    input.addEventListener("blur", () => commit(true));
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter")  { e.preventDefault(); input.blur(); }
+      if (e.key === "Escape") { e.preventDefault(); commit(false); }
+    });
+    input.addEventListener("click",     e => e.stopPropagation());
+    input.addEventListener("mousedown", e => e.stopPropagation());
+  }
+
+  // ---- editor: objeto (textarea multi-linha, Cmd/Ctrl+Enter ou blur pra salvar) ----
+  function editObjeto(anchor, row, itemId) {
+    const item = state.find(i => i.id === itemId);
+    if (!item) return;
+    closeAllPopovers();
+    row.classList.add("editing");
+    const original = item.objeto || "";
+    anchor.innerHTML = `<textarea class="inline-input inline-textarea">${esc(original)}</textarea>`;
+    const ta = anchor.querySelector("textarea");
+    ta.focus({ preventScroll: true }); // ver editValor pra contexto
+    ta.select();
+    const commit = (save) => {
+      if (save) item.objeto = ta.value.trim();
+      render();
+    };
+    ta.addEventListener("blur", () => commit(true));
+    ta.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") { e.preventDefault(); commit(false); }
+      if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+        e.preventDefault();
+        ta.blur();
+      }
+    });
+    ta.addEventListener("click",     e => e.stopPropagation());
+    ta.addEventListener("mousedown", e => e.stopPropagation());
+  }
+
+  // ---- editor: cidade e estado (popover com dois selects dependentes) ----
+  function editCidade(anchor, row, itemId) {
+    const item = state.find(i => i.id === itemId);
+    if (!item) return;
+    // Estado inicial: se item.estado vazio, default pra primeiro UF
+    if (!item.estado || !CITIES_BY_UF[item.estado]) item.estado = "SP";
+
+    const renderSelects = (pop) => {
+      const ufOptions = UF_LIST.map(uf =>
+        `<option value="${uf}" ${uf === item.estado ? "selected" : ""}>${uf}</option>`
+      ).join("");
+      const cities = CITIES_BY_UF[item.estado] || [];
+      // Se cidade atual não pertence ao estado selecionado, força pra primeira
+      if (!cities.includes(item.cidade)) item.cidade = cities[0] || "";
+      const cidadeOptions = cities.map(c =>
+        `<option value="${esc(c)}" ${c === item.cidade ? "selected" : ""}>${esc(c)}</option>`
+      ).join("");
+
+      pop.innerHTML = `
+        <div class="cidade-edit-field">
+          <label class="cidade-edit-label">Estado</label>
+          <select class="cidade-edit-select" data-field="estado">${ufOptions}</select>
+        </div>
+        <div class="cidade-edit-field">
+          <label class="cidade-edit-label">Cidade</label>
+          <select class="cidade-edit-select" data-field="cidade">${cidadeOptions}</select>
+        </div>
+      `;
+      pop.querySelector('[data-field="estado"]').addEventListener("change", (e) => {
+        item.estado = e.target.value;
+        // Estado mudou → cidade pode não existir mais no novo. renderSelects ajusta.
+        const newCities = CITIES_BY_UF[item.estado] || [];
+        if (!newCities.includes(item.cidade)) item.cidade = newCities[0] || "";
+        renderSelects(pop);
+      });
+      pop.querySelector('[data-field="cidade"]').addEventListener("change", (e) => {
+        item.cidade = e.target.value;
+      });
+    };
+
+    const pop = showPopover(anchor, '<div class="cidade-edit-pop"></div>', {
+      minWidth: 240,
+      onMount: (popEl) => {
+        const inner = popEl.querySelector(".cidade-edit-pop");
+        renderSelects(inner);
+        popEl.querySelector("select")?.focus({ preventScroll: true }); // ver editValor pra contexto
+      }
+    });
+
+    // Observa remoção do popover (click-fora ou Escape via closeAllPopovers)
+    // pra re-renderizar o card refletindo as mudanças escritas em item.
+    const observer = new MutationObserver(() => {
+      if (!document.body.contains(pop)) {
+        observer.disconnect();
+        render();
+      }
+    });
+    observer.observe(document.body, { childList: true, subtree: false });
   }
 
   // Dispatch por chave de propriedade
@@ -978,22 +1275,28 @@
     responsaveis: editResponsaveis,
     valor:        editValor,
     dataEnvio:    editDataEnvio,
+    orgao:        editOrgao,
+    objeto:       editObjeto,
+    cidade:       editCidade,
   };
 
-  function bindCardEvents() {
-    document.querySelectorAll(".card-root").forEach(card => {
+  // Liga todos os listeners de UM card (drag, click, edit, checkbox, action-btn,
+  // tooltips). Helper reusado por bindCardEvents (board) e showEventHover
+  // (popover do calendar) — assim o popover fica idêntico ao card do board.
+  function bindCardListeners(card) {
       const id = card.dataset.id;
 
       card.addEventListener("dragstart", (e) => {
-        if (e.target.closest("[data-card-select], .action-btn, .card-edit-target")) {
+        if (e.target.closest("[data-card-select], .action-btn")) {
           e.preventDefault();
           return;
         }
-        // Não arrasta enquanto algum editor inline está aberto
         if (document.querySelector(".popover")) {
           e.preventDefault();
           return;
         }
+        // Captura altura ANTES de adicionar .dragging (pra refletir tamanho real)
+        _draggedHeight = card.getBoundingClientRect().height;
         card.classList.add("dragging");
         e.dataTransfer.setData("text/plain", id);
         e.dataTransfer.effectAllowed = "move";
@@ -1001,25 +1304,22 @@
       });
       card.addEventListener("dragend", () => {
         card.classList.remove("dragging");
+        clearDropIndicators();
         document.querySelectorAll(".lane.drop-target").forEach(l => l.classList.remove("drop-target"));
-        // dragend dispara depois do drop; setTimeout impede que o click pós-drop dispare openDetail
         setTimeout(() => { wasDragging = false; }, 50);
       });
 
-      // Click no card → abre o detail panel (exceto sobre checkbox/ações/editor inline)
+      // Click no card (fora de propriedades, botões, popovers) abre modal
+      // "Em construção". Tela de detalhe ainda em design.
       card.addEventListener("click", (e) => {
-        if (e.target.closest("[data-card-select], .action-btn, .floating-actions")) return;
-        // Padrão Notion: se clicou no .card-edit-target dentro da row, deixa
-        // o handler de edição inline lidar (não abre detail).
-        if (e.target.closest(".card-edit-target")) return;
-        // Se um popover está aberto e clicou no popover, ignora também.
-        if (e.target.closest(".popover")) return;
-        // Ignora se acabou de soltar um drag
         if (wasDragging) return;
-        openDetail(id);
+        if (e.target.closest("[data-card-select], .action-btn, .card-edit-target, .popover")) return;
+        showConstructionModal();
       });
 
-      // Inline edit: cada .card-edit-target dispara o editor da row pai (data-prop).
+      // Inline edit: click em qualquer .card-edit-target dispara o editor da row pai.
+      // Sem mousedown.stopPropagation aqui — o browser distingue click (sem movimento
+      // → editor) de drag (com movimento → drag-and-drop) nativamente.
       card.querySelectorAll(".card-edit-target").forEach(target => {
         target.addEventListener("click", (e) => {
           if (wasDragging) return;
@@ -1030,8 +1330,6 @@
           const editor = INLINE_EDITORS[prop];
           if (editor) editor(target, row, id);
         });
-        // Não inicia drag a partir do target de edição
-        target.addEventListener("mousedown", e => e.stopPropagation());
       });
 
       // Checkbox de seleção
@@ -1093,7 +1391,10 @@
 
       // Tooltips por property-row (renderizado em document.body)
       card.querySelectorAll("[data-tooltip]").forEach(bindTooltip);
-    });
+  }
+
+  function bindCardEvents() {
+    document.querySelectorAll(".card-root").forEach(bindCardListeners);
   }
 
   // ---------- detail panel ----------
@@ -1101,6 +1402,7 @@
     const item = state.find(i => i.id === id);
     if (!item) return;
     closeAllPopovers();
+    hideEventHover();
 
     const overlay = document.getElementById("detailOverlay");
     const panel   = document.getElementById("detailPanel");
@@ -1160,32 +1462,135 @@
     if (e.key === "Escape") closeDetail();
   });
 
+  // ---------- drop placeholder (caixa do tamanho do card mostrando o espaço de destino) ----------
+  let _draggedHeight = 0;
+  let _placeholder = null;
+  let _currentDropKey = null;  // dedup pra não mexer no DOM toda hora
+
+  function clearDropIndicators() {
+    if (_placeholder) { _placeholder.remove(); _placeholder = null; }
+    _currentDropKey = null;
+  }
+
+  // Dado o cursor (clientY) na lane, retorna { card, position }:
+  // card = card-root mais próximo (excluindo o que está sendo arrastado),
+  // position = 'before' | 'after'. Lane vazia → { card: null, position: 'after' }.
+  function findDropTarget(lane, clientY) {
+    const cards = [...lane.querySelectorAll(".card-root:not(.dragging)")];
+    if (cards.length === 0) return { card: null, position: "after" };
+    for (const card of cards) {
+      const rect = card.getBoundingClientRect();
+      if (clientY < rect.top + rect.height / 2) {
+        return { card, position: "before" };
+      }
+    }
+    return { card: cards[cards.length - 1], position: "after" };
+  }
+
+  function positionPlaceholder(lane, target) {
+    const laneBody = lane.querySelector(".lane-body");
+    if (!_placeholder) {
+      _placeholder = document.createElement("div");
+      _placeholder.className = "drop-placeholder";
+      // Em flex-column, height inline pode ser encolhido. flex: 0 0 X crava
+      // exatamente a altura do card que está sendo arrastado.
+      const h = _draggedHeight || 120;
+      _placeholder.style.flex = `0 0 ${h}px`;
+      _placeholder.style.minHeight = h + "px";
+    }
+    if (target.card) {
+      if (target.position === "before") {
+        target.card.parentNode.insertBefore(_placeholder, target.card);
+      } else {
+        target.card.parentNode.insertBefore(_placeholder, target.card.nextSibling);
+      }
+    } else {
+      // Lane vazia — coloca no body
+      laneBody.appendChild(_placeholder);
+    }
+  }
+
   function bindLaneEvents() {
     document.querySelectorAll(".lane").forEach(lane => {
       lane.addEventListener("dragover", e => {
         e.preventDefault();
         e.dataTransfer.dropEffect = "move";
         lane.classList.add("drop-target");
+
+        const target = findDropTarget(lane, e.clientY);
+        // Chave única pra dedup — só re-posiciona o placeholder se mudou
+        const key = `${lane.dataset.etapa}|${target.card?.dataset.id || "end"}|${target.position}`;
+        if (key === _currentDropKey) return;
+        _currentDropKey = key;
+        positionPlaceholder(lane, target);
       });
       lane.addEventListener("dragleave", e => {
-        if (e.target === lane) lane.classList.remove("drop-target");
+        // Só limpa se saiu da lane de verdade (não pra um filho)
+        if (!lane.contains(e.relatedTarget)) {
+          lane.classList.remove("drop-target");
+          // NÃO remove o placeholder aqui — ele se move pra outra lane no próximo dragover
+        }
       });
       lane.addEventListener("drop", e => {
         e.preventDefault();
-        lane.classList.remove("drop-target");
         const id = e.dataTransfer.getData("text/plain");
         const newEtapa = lane.dataset.etapa;
-        moveItem(id, newEtapa);
+        const target = findDropTarget(lane, e.clientY);
+        clearDropIndicators();
+        lane.classList.remove("drop-target");
+        moveItem(id, newEtapa, target.card?.dataset.id || null, target.position);
       });
     });
   }
 
-  function moveItem(id, newEtapa) {
+  // Move (e reordena) item no state. targetId/position = onde inserir relativo a outro card.
+  // Se targetId null, vai pro fim da etapa.
+  function moveItem(id, newEtapa, targetId, position) {
     const item = state.find(i => i.id === id);
-    if (!item || item.etapa === newEtapa) return;
+    if (!item) return;
+    const fromIdx = state.indexOf(item);
+    if (fromIdx < 0) return;
+
+    // Remove da posição atual
+    state.splice(fromIdx, 1);
     item.etapa = newEtapa;
+
+    // Calcula índice de inserção
+    let insertIdx;
+    if (targetId) {
+      const target = state.find(i => i.id === targetId);
+      const targetIdx = state.indexOf(target);
+      insertIdx = position === "after" ? targetIdx + 1 : targetIdx;
+    } else {
+      // Sem target (lane vazia ou drop além) — coloca no fim do state
+      insertIdx = state.length;
+    }
+    state.splice(insertIdx, 0, item);
     render();
   }
+
+  // ---------- modal "Em construção" ----------
+  function showConstructionModal() {
+    const modal = document.getElementById("constructionModal");
+    if (!modal) return;
+    modal.hidden = false;
+    // foco no botão "Entendi" pra acessibilidade
+    const btn = modal.querySelector(".construction-modal-btn");
+    if (btn) setTimeout(() => btn.focus(), 50);
+  }
+  function hideConstructionModal() {
+    const modal = document.getElementById("constructionModal");
+    if (modal) modal.hidden = true;
+  }
+  // Bind close: qualquer elemento com data-close fecha o modal
+  document.getElementById("constructionModal")?.addEventListener("click", (e) => {
+    if (e.target.closest("[data-close]")) hideConstructionModal();
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !document.getElementById("constructionModal")?.hidden) {
+      hideConstructionModal();
+    }
+  });
 
   render();
 })();

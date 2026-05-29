@@ -10,7 +10,7 @@
     href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap"
     rel="stylesheet"
   />
-  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="styles.css?v=28" />
 </head>
 <body>
   <aside class="sidebar" aria-label="Sidebar">
@@ -84,10 +84,10 @@
         Board <span class="view-count" id="count-board">0</span>
       </button>
       <button class="view-tab" role="tab" data-view="table">
-        Table <span class="view-count">0</span>
+        Tabela <span class="view-count">0</span>
       </button>
       <button class="view-tab" role="tab" data-view="calendar">
-        Calendar <span class="view-count">0</span>
+        Calendário <span class="view-count">0</span>
       </button>
     </div>
 
@@ -109,6 +109,25 @@
   <main class="calendar-view" id="calendar" hidden aria-label="Calendar"></main>
   <main class="table-view" id="tableView" hidden aria-label="Table"></main>
 
+  <!-- Modal de "Em construção" — mostrado ao clicar no card (fora de propriedades) -->
+  <div class="construction-modal" id="constructionModal" hidden role="dialog" aria-modal="true" aria-labelledby="constructionModalTitle">
+    <div class="construction-modal-overlay" data-close></div>
+    <div class="construction-modal-dialog">
+      <header class="construction-modal-header">
+        <span class="construction-modal-title" id="constructionModalTitle">Em construção</span>
+        <button class="construction-modal-close" data-close aria-label="Fechar">
+          <svg viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 5l10 10M15 5L5 15"/></svg>
+        </button>
+      </header>
+      <div class="construction-modal-body">
+        <p>Esta tela ainda está em construção.</p>
+      </div>
+      <footer class="construction-modal-footer">
+        <button class="construction-modal-btn" data-close>Entendi</button>
+      </footer>
+    </div>
+  </div>
+
   <!-- Detail panel: abre ao clicar num card, renderiza o card-fonte via iframe -->
   <div class="detail-overlay" id="detailOverlay" hidden></div>
   <aside class="detail-panel" id="detailPanel" hidden aria-label="Detalhe da licitação">
@@ -121,7 +140,7 @@
     <iframe class="detail-iframe" id="detailIframe" title="Detalhe do card"></iframe>
   </aside>
 
-  <script src="data.js?v=3"></script>
-  <script src="app.js?v=3"></script>
+  <script src="data.js?v=12"></script>
+  <script src="app.js?v=24"></script>
 </body>
 </html>

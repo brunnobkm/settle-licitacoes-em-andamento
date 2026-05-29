@@ -196,10 +196,15 @@ button { font-family: inherit; cursor: pointer; }
 }
 .lane-dot { width: 8px; height: 8px; border-radius: 999px; }
 .lane-count { font-size: 12px; color: var(--text-mute); font-variant-numeric: tabular-nums; }
-.lane-body { display: flex; flex-direction: column; gap: 8px; overflow-y: auto; padding: 0 2px 2px 0; scrollbar-width: thin; }
+/* Padding interno cria zona segura pra sombra do hover não ser clipada pelo overflow */
+.lane-body { display: flex; flex-direction: column; gap: 8px; overflow-y: auto; padding: 4px 8px 8px 8px; scrollbar-width: thin; }
 .lane-body::-webkit-scrollbar { width: 6px; }
 .lane-body::-webkit-scrollbar-thumb { background: #D9DCE1; border-radius: 4px; }
-.lane.drop-target { outline: 2px dashed #C5CCD8; outline-offset: -2px; }
+/* Lane recebendo drop: tinta suave em vez de outline tracejado quebrado */
+.lane.drop-target {
+  background: rgba(58, 155, 158, 0.08);
+  transition: background 120ms ease;
+}
 
 /* ---------- Card — espelha licitacoes-em-andamento-card/prototype.html ---------- */
 .card-root {
@@ -207,13 +212,37 @@ button { font-family: inherit; cursor: pointer; }
   background: var(--bg-card);
   border: 1px solid var(--border-card);
   border-radius: 12px;
-  cursor: grab;
-  transition: border-color 150ms ease, transform 150ms ease-out;
-  transform-origin: 50% 50%;
+  /* Sem cursor de drag — match com Notion: usuário descobre que pode arrastar
+     ao tentar. Só as rows editáveis (.prop) mostram pointer. */
+  transition: box-shadow 150ms ease, transform 150ms ease-out, border-color 150ms ease;
+  will-change: transform;
 }
-.card-root:hover { transform: scale(1.005); }
-.card-root:active { cursor: grabbing; }
-.card-root.dragging { opacity: .4; }
+.card-root:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(15,15,15,0.08), 0 1px 3px rgba(15,15,15,0.06);
+  border-color: #D9DCE1;
+}
+.card-root.dragging {
+  opacity: 0.45;
+  transform: scale(0.985);
+  box-shadow: none;
+}
+
+/* Placeholder de drop: ocupa exatamente o espaço onde o card vai cair.
+   Cards vizinhos se deslocam naturalmente pelo flex gap, deixando claro que
+   o card vai assumir aquele espaço. */
+.drop-placeholder {
+  background: rgba(58, 155, 158, 0.08);
+  border: 2px dashed var(--teal-accent);
+  border-radius: 12px;
+  box-sizing: border-box;
+  pointer-events: none;
+  animation: drop-pulse 1.4s ease-in-out infinite;
+}
+@keyframes drop-pulse {
+  0%, 100% { background: rgba(58, 155, 158, 0.06); }
+  50%      { background: rgba(58, 155, 158, 0.14); }
+}
 .card-root.selected {
   border-color: var(--teal-accent);
   /* inset ring: nunca é clipado pelo overflow da lane-body */
@@ -260,7 +289,8 @@ button { font-family: inherit; cursor: pointer; }
 }
 .prop { cursor: pointer; transition: background-color 120ms ease; }
 .prop:hover { background-color: rgba(15,15,15,.035); }
-.prop-static { cursor: default; }
+/* prop-static: row read-only — sem cursor especial (herda do card-root). */
+.prop-static { cursor: inherit; }
 
 /* Tooltips são renderizados via JS em document.body com position:fixed
    pra escapar do overflow:auto da lane-body. Auto-flip pra baixo se não
@@ -279,6 +309,26 @@ button { font-family: inherit; cursor: pointer; }
   transition: opacity 120ms ease, transform 120ms ease;
 }
 .kb-tooltip.visible { opacity: 1; transform: translateY(0); }
+/* Variante com label + valor (quando o texto da row está truncado) */
+.kb-tooltip.kb-tooltip-with-value {
+  white-space: normal;
+  max-width: 320px;
+  padding: 6px 10px;
+}
+.kb-tooltip-label {
+  font-size: 10px;
+  font-weight: 500;
+  color: rgba(255,255,255,.6);
+  letter-spacing: 0.02em;
+  margin-bottom: 3px;
+}
+.kb-tooltip-value {
+  font-size: 12px;
+  font-weight: 400;
+  color: white;
+  word-break: break-word;
+  line-height: 1.4;
+}
 
 /* 1. Título */
 .prop-titulo { font-weight: 600; }
@@ -324,8 +374,8 @@ button { font-family: inherit; cursor: pointer; }
 .card-select-checkbox svg { width: 11px; height: 11px; color: white; opacity: 0; }
 .card-select-checkbox.checked svg { opacity: 1; }
 
-/* 2. Edital */
-.prop-edital { font-size: 13px; color: var(--text); }
+/* 2. Edital — texto em bold (identifica o card) */
+.prop-edital { font-size: 13px; font-weight: 700; color: var(--text); }
 .mono { font-family: ui-monospace, "JetBrains Mono", SFMono-Regular, Menlo, monospace; }
 
 /* 3. Segmentos */
@@ -399,6 +449,90 @@ button { font-family: inherit; cursor: pointer; }
 
 .empty-hint { color: rgba(15,15,15,.4); }
 
+/* ---------- Modal "Em construção" — abre ao clicar no card (fora de propriedades) ---------- */
+.construction-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.construction-modal[hidden] { display: none; }
+.construction-modal-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(15,15,15,.45);
+  animation: ctr-fade 140ms ease;
+}
+.construction-modal-dialog {
+  position: relative;
+  background: white;
+  border-radius: 14px;
+  width: 420px;
+  max-width: 92vw;
+  box-shadow: 0 16px 48px rgba(15,15,15,.18), 0 2px 8px rgba(15,15,15,.08);
+  animation: ctr-pop 180ms cubic-bezier(.2,.9,.3,1);
+  overflow: hidden;
+}
+.construction-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 12px 0 20px;
+}
+.construction-modal-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+.construction-modal-close {
+  width: 26px; height: 26px;
+  border: 0; background: transparent;
+  border-radius: 6px;
+  color: var(--text-mute);
+  cursor: pointer;
+  display: grid; place-items: center;
+}
+.construction-modal-close:hover { background: var(--hover-bg); color: var(--text); }
+.construction-modal-body {
+  padding: 4px 20px 8px;
+  text-align: left;
+}
+.construction-modal-body p {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text);
+  line-height: 1.5;
+}
+.construction-modal-footer {
+  padding: 12px 16px 16px;
+  display: flex;
+  justify-content: flex-end;
+}
+.construction-modal-btn {
+  background: var(--teal-accent);
+  color: white;
+  border: 0;
+  border-radius: 8px;
+  padding: 8px 16px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 120ms ease;
+}
+.construction-modal-btn:hover { background: #2F8689; }
+
+@keyframes ctr-fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes ctr-pop {
+  from { opacity: 0; transform: translateY(-8px) scale(.96); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
 /* ---------- Calendar view (estilo Notion) ---------- */
 .calendar-view, .table-view {
   position: fixed;
@@ -436,17 +570,17 @@ button { font-family: inherit; cursor: pointer; }
   border-bottom: 1px solid var(--border-soft);
   border-right: 1px solid var(--border-soft);
   vertical-align: middle;
-  overflow: hidden;
+  /* sem overflow:hidden — textos longos quebram linha (white-space:normal abaixo)
+     e a row cresce naturalmente, espelhando o comportamento do Notion/Airtable. */
 }
 .lic-table th:last-child, .lic-table td:last-child { border-right: 0; }
 .lic-table tbody tr:last-child td { border-bottom: 0; }
 
 .lic-table thead th {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 500;
   color: var(--text-mute);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0;
   background: #FAFAFA;
   position: sticky;
   top: 0;
@@ -455,10 +589,28 @@ button { font-family: inherit; cursor: pointer; }
 }
 
 .lic-table tbody tr {
-  cursor: pointer;
+  cursor: default;
   transition: background-color 100ms ease;
 }
 .lic-table tbody tr:hover { background: var(--hover-bg); }
+
+/* Edição inline na tabela — a célula INTEIRA é o alvo de clique (pedido do
+   Brunno 2026-05-29). .card-edit-target dentro continua sendo o anchor pra
+   popovers e pra input inline (valor/orgao/objeto), mas o hover/cursor vivem
+   no td. */
+.lic-table td[data-prop] {
+  cursor: pointer;
+  transition: background-color 100ms ease;
+}
+.lic-table td[data-prop]:hover { background-color: rgba(15,15,15,.045); }
+.lic-table td[data-prop].editing { background-color: #F5F5F5; }
+
+/* Suprime o bg-hover do .card-edit-target dentro da tabela — o td:hover acima
+   já cobre a célula inteira. Chips coloridos (.tag-pill/.status-pill/.person-chip)
+   mantêm o filter:brightness vindo da regra global. */
+.lic-table td[data-prop] .card-edit-target:not(.tag-pill):not(.status-pill):not(.person-chip):hover {
+  background-color: transparent;
+}
 
 /* Column widths */
 .lic-table .col-match        { width: 320px; }
@@ -476,10 +628,16 @@ button { font-family: inherit; cursor: pointer; }
 /* Cell-specific styles (reaproveitam tokens do card) */
 .lic-table .cell-match  { font-weight: 600; color: var(--text); }
 .lic-table .cell-orgao  { font-weight: 600; }
-.lic-table .cell-match, .lic-table .cell-orgao, .lic-table .cell-objeto, .lic-table .cell-local {
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  overflow: hidden;
+/* Wrap em vez de truncar — pedido do Brunno 2026-05-29.
+   word-break:break-word evita texto super longo (URL, código) estourar a coluna. */
+.lic-table .cell-match,
+.lic-table .cell-orgao,
+.lic-table .cell-objeto,
+.lic-table .cell-local {
+  white-space: normal;
+  word-break: break-word;
+  overflow: visible;
+  text-overflow: clip;
 }
 .lic-table .cell-valor  { font-variant-numeric: tabular-nums; text-align: right; }
 .lic-table .col-valor   { text-align: right; }
@@ -629,7 +787,8 @@ button { font-family: inherit; cursor: pointer; }
   min-width: 0;
   transition: background-color 120ms ease, border-color 120ms ease;
 }
-.cal-event:hover { background: var(--hover-bg); border-color: #D9DCE1; }
+/* chip hover removido — click no chip não tem ação especial (apenas mouseenter
+   dispara o popover de preview), então sem feedback visual no chip em si */
 .cal-event-dot {
   width: 6px; height: 6px;
   border-radius: 999px;
@@ -656,6 +815,23 @@ button { font-family: inherit; cursor: pointer; }
   width: fit-content;
 }
 .cal-more:hover { background: var(--hover-bg); color: var(--text); }
+
+/* ---------- Event hover preview (Google Agenda style: renderiza o card do board) ---------- */
+.event-hover-card {
+  position: fixed;
+  width: 358px;
+  z-index: 60;
+  cursor: pointer;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(15,15,15,.12), 0 2px 6px rgba(15,15,15,.06);
+  animation: hover-pop 120ms cubic-bezier(.2,.9,.3,1);
+}
+/* Popover === board card: sem overrides, comportamento idêntico (hover, edição,
+   tooltips, click→modal). bindCardListeners é chamado no JS pra ligar listeners. */
+@keyframes hover-pop {
+  from { opacity: 0; transform: translateY(-3px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
 
 /* ---------- Day popover (lista completa dos eventos do dia) ---------- */
 .day-popover {
@@ -896,6 +1072,47 @@ button { font-family: inherit; cursor: pointer; }
 }
 .inline-value-wrap .inline-prefix { color: rgba(15,15,15,.5); }
 .inline-value-wrap .inline-input { min-width: 60px; }
+
+/* Editor de objeto: textarea multi-linha, desativa o clamp do objeto-clamp em modo editing */
+.inline-textarea {
+  width: 100%;
+  min-height: 72px;
+  resize: vertical;
+  line-height: 1.4;
+}
+.property-row.editing .objeto-clamp {
+  display: block;
+  -webkit-line-clamp: unset;
+  overflow: visible;
+}
+
+/* Editor de Cidade e Estado: popover com dois selects dependentes */
+.cidade-edit-pop { padding: 4px; }
+.cidade-edit-field {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+}
+.cidade-edit-label {
+  font-size: 12px;
+  color: var(--text-mute);
+  font-weight: 500;
+  min-width: 50px;
+}
+.cidade-edit-select {
+  flex: 1;
+  font: inherit;
+  font-size: 13px;
+  padding: 5px 8px;
+  border: 1px solid var(--border-soft);
+  border-radius: 6px;
+  background: white;
+  outline: none;
+  cursor: pointer;
+  color: var(--text);
+}
+.cidade-edit-select:focus { border-color: #B7C4DA; }
 
 /* Mini-calendar dentro do popover (date picker) */
 .mini-cal {
