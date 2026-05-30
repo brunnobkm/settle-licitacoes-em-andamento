@@ -621,6 +621,7 @@ button { font-family: inherit; cursor: pointer; }
 .lic-table .col-objeto       { width: 320px; }
 .lic-table .col-status       { width: 200px; }
 .lic-table .col-resultado    { width: 200px; }
+.lic-table .col-acoes        { width: 84px; }
 .lic-table .col-responsaveis { width: 260px; }
 .lic-table .col-data         { width: 120px; }
 .lic-table .col-local        { width: 170px; }
@@ -649,6 +650,29 @@ button { font-family: inherit; cursor: pointer; }
   flex-wrap: wrap;
 }
 .lic-table .cell-responsaveis .people-list { gap: 4px; }
+
+/* Ações da row — espelha o look das floating-actions do card do Board, mas
+   sempre visíveis (sem o esquema de aparecer no hover do card). */
+.lic-table .cell-acoes  { padding: 6px 8px; }
+.row-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.row-action-btn {
+  padding: 4px;
+  border: 0;
+  background: transparent;
+  border-radius: 5px;
+  color: rgba(15,15,15,.6);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font: inherit;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+.row-action-btn:hover { background: rgba(15,15,15,.05); color: #1f1f1f; }
 
 /* Etapa pill — combina dot + label do estágio */
 .etapa-pill {

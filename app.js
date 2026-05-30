@@ -205,7 +205,7 @@
       },
       {
         key: "dataEnvio",
-        tooltip: "Data de envio da proposta",
+        tooltip: "Envio da proposta",
         classes: `prop prop-date ${dateClasses[dateState]}`,
         content: item.dataEnvio
           ? `<span class="card-edit-target">${formatDateBR(item.dataEnvio)}</span>`
@@ -348,13 +348,13 @@
     const rawMonth = firstOfMonth.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
     const monthLabel = rawMonth.charAt(0).toUpperCase() + rawMonth.slice(1); // "Maio de 2026"
 
-    // Chip "N licitações sem data de envio da proposta" ao lado do "Hoje" no
-    // toolbar. Texto completo na badge (sem ambiguidade com outras datas) —
-    // pedido do Brunno 2026-05-29.
+    // Chip "N licitações sem envio da proposta" ao lado do "Hoje" no toolbar.
+    // Usa a label canônica atualizada (era "Data de envio da proposta" antes
+    // do rename de 2026-05-29).
     const bannerHTML = unscheduled.length ? `
       <button class="cal-unsched-banner" id="calUnschedBanner" type="button">
         <span class="cal-unsched-dot"></span>
-        ${unscheduled.length} ${unscheduled.length === 1 ? "licitação" : "licitações"} sem data de envio da proposta
+        ${unscheduled.length} ${unscheduled.length === 1 ? "licitação" : "licitações"} sem envio da proposta
       </button>
     ` : "";
 
@@ -607,14 +607,15 @@
     { key: "objeto",       label: "Objeto",                     cls: "col-objeto" },
     { key: "status",       label: "Status do edital",           cls: "col-status" },
     { key: "responsaveis", label: "Responsável",                cls: "col-responsaveis" },
-    { key: "dataEnvio",    label: "Data de envio da proposta",  cls: "col-data" },
+    { key: "dataEnvio",    label: "Envio da proposta",          cls: "col-data" },
     { key: "local",        label: "Cidade e Estado",            cls: "col-local" },
     { key: "valor",        label: "Valor global",               cls: "col-valor" },
     { key: "etapa",        label: "Etapa",                      cls: "col-etapa" },
-    // Resultado por último — só aplicável a cards em "Resultados Finais", então
-    // a coluna fica majoritariamente vazia; colocar no fim evita "buraco" visual
-    // no meio da tabela. Pedido do Brunno 2026-05-29.
-    { key: "resultado",    label: "Resultado",                  cls: "col-resultado" }
+    // Resultado: só aplicável a cards em "Resultados Finais", então a coluna
+    // fica majoritariamente vazia; ficar perto do fim evita "buraco" visual.
+    { key: "resultado",    label: "Resultado",                  cls: "col-resultado" },
+    // Ações: espelha as floating-actions do card (Copiar link + Descartar).
+    { key: "acoes",        label: "Ações",                      cls: "col-acoes" }
   ];
 
   // Conteúdo de cada célula da tabela. Para colunas editáveis, o conteúdo
@@ -677,6 +678,27 @@
         return `<span class="card-edit-target cell-local">${esc(it.cidade)} <span class="local-sep">•</span> ${esc(it.estado)}</span>`;
       case "valor":
         return `<span class="card-edit-target cell-valor">${brl(it.valorGlobal)}</span>`;
+      case "acoes":
+        // Mesmas ações do card do Board (floating-actions): Copiar link e
+        // Descartar. SVGs idênticos pra manter consistência visual.
+        return `
+          <div class="row-actions">
+            <button class="row-action-btn" data-action="copiar-link" title="Copiar link" aria-label="Copiar link">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M10 13a5 5 0 0 0 7.07 0l3-3a5 5 0 0 0-7.07-7.07L11.5 4.5"/>
+                <path d="M14 11a5 5 0 0 0-7.07 0l-3 3a5 5 0 0 0 7.07 7.07L12.5 19.5"/>
+              </svg>
+            </button>
+            <button class="row-action-btn" data-action="descartar" title="Descartar" aria-label="Descartar">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 6h18"/>
+                <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+                <path d="M10 11v6"/>
+                <path d="M14 11v6"/>
+              </svg>
+            </button>
+          </div>`;
       default:
         return "";
     }
@@ -694,6 +716,7 @@
   function tableColPropKey(colKey, item) {
     switch (colKey) {
       case "codigoEdital": return null; // não editável (identificador imutável)
+      case "acoes":        return null; // botões diretos, não usam INLINE_EDITORS
       case "local":        return "cidade";
       default:             return colKey;
     }
@@ -758,6 +781,22 @@
           if (!editor) return;
           const anchor = cell.querySelector(".card-edit-target") || cell;
           editor(anchor, cell, id);
+        });
+      });
+
+      // Row actions (coluna "Ações") — stubs idênticos ao card do Board.
+      // TODO: implementar handlers reais quando definirmos o backend
+      // (copy real URL, descarte com confirmação).
+      tr.querySelectorAll(".row-action-btn").forEach(btn => {
+        btn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          e.preventDefault();
+          const action = btn.dataset.action;
+          if (action === "copiar-link") {
+            console.log("Copiar link:", id);
+          } else if (action === "descartar") {
+            console.log("Descartar:", id);
+          }
         });
       });
     });
