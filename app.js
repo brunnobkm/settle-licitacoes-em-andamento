@@ -634,7 +634,22 @@
         return `<span class="card-edit-target etapa-pill"><span class="lane-dot" style="background:${e.dot}"></span>${esc(e.label)}</span>`;
       }
       case "codigoEdital":
-        return `<span class="mono">${esc(it.codigoEdital)}</span>`;
+        // Edital = read-only. A "porta de entrada" da row é um botão "Abrir"
+        // que aparece no hover (padrão Notion). Wrapper interno mantém o
+        // vertical-align: middle da table-cell (não dá pra usar display:flex
+        // direto na td sem quebrar isso).
+        return `
+          <div class="cell-edital-wrap">
+            <span class="mono">${esc(it.codigoEdital)}</span>
+            <button class="open-row-btn" type="button" data-open-row aria-label="Abrir licitação">
+              <svg viewBox="0 0 16 16" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M6 3H4a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1v-2"/>
+                <path d="M9 3h4v4"/>
+                <path d="M13 3 8 8"/>
+              </svg>
+              Abrir
+            </button>
+          </div>`;
       case "segmentos":
         return `<span class="card-edit-target"><span class="pills">${
           it.segmentos.length
@@ -797,6 +812,16 @@
           } else if (action === "descartar") {
             console.log("Descartar:", id);
           }
+        });
+      });
+
+      // Click no botão "Abrir" → modal "Em construção" (decisão Brunno
+      // 2026-05-29: o detail panel pela tabela ainda não está finalizado;
+      // por ora avisa que está em construção).
+      tr.querySelectorAll("[data-open-row]").forEach(el => {
+        el.addEventListener("click", (e) => {
+          e.stopPropagation();
+          showConstructionModal();
         });
       });
     });

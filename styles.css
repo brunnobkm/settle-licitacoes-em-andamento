@@ -651,6 +651,44 @@ button { font-family: inherit; cursor: pointer; }
 }
 .lic-table .cell-responsaveis .people-list { gap: 4px; }
 
+/* Botão "Abrir" da row (padrão Notion: aparece só no hover da row, na 1ª col).
+   Wrapper interno é o flex container — não dá pra fazer display:flex na td
+   direto sem quebrar o vertical-align: middle nativo da table-cell. */
+.cell-edital-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.open-row-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border: 1px solid var(--border-soft);
+  border-radius: 5px;
+  background: white;
+  color: rgba(15,15,15,.7);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 100ms ease, background-color 100ms ease, color 100ms ease;
+  flex-shrink: 0;
+}
+.lic-table tbody tr:hover .open-row-btn { opacity: 1; }
+.open-row-btn:hover {
+  background: var(--hover-bg);
+  color: var(--text);
+}
+/* Foco visível pra acessibilidade (teclado) */
+.open-row-btn:focus-visible {
+  opacity: 1;
+  outline: 2px solid #3A9B9E;
+  outline-offset: 1px;
+}
+
 /* Ações da row — espelha o look das floating-actions do card do Board, mas
    sempre visíveis (sem o esquema de aparecer no hover do card). */
 .lic-table .cell-acoes  { padding: 6px 8px; }
