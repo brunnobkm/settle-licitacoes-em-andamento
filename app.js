@@ -348,13 +348,14 @@
     const rawMonth = firstOfMonth.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
     const monthLabel = rawMonth.charAt(0).toUpperCase() + rawMonth.slice(1); // "Maio de 2026"
 
-    // Chip "N licitações sem envio da proposta" ao lado do "Hoje" no toolbar.
-    // Usa a label canônica atualizada (era "Data de envio da proposta" antes
-    // do rename de 2026-05-29).
+    // Chip "N licitações sem data de envio da proposta" ao lado do "Hoje" no
+    // toolbar. Mesmo após o rename da label canônica pra "Envio da proposta",
+    // a banner mantém "data de envio da proposta" porque na frase a expressão
+    // completa lê melhor (pedido Brunno 2026-05-29).
     const bannerHTML = unscheduled.length ? `
       <button class="cal-unsched-banner" id="calUnschedBanner" type="button">
         <span class="cal-unsched-dot"></span>
-        ${unscheduled.length} ${unscheduled.length === 1 ? "licitação" : "licitações"} sem envio da proposta
+        ${unscheduled.length} ${unscheduled.length === 1 ? "licitação" : "licitações"} sem data de envio da proposta
       </button>
     ` : "";
 
